@@ -1,0 +1,25 @@
+# Sensitive credentials — never commit these
+.env
+credentials.json
+token.json
+
+# Research cache — ignore generated JSON files, keep directory structure
+cache/research/*.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
