@@ -236,7 +236,11 @@ def _generate_queries(research: dict, region: str) -> list[str]:
     all_products: list = research.get("products") or []
     products_list = "\n".join(f"  - {p}" for p in all_products if isinstance(p, str))
 
-    prompt = _QUERY_GEN_PROMPT.format(
+    # Use a custom prompt template from the cache if one exists, otherwise
+    # fall back to the built-in default. This allows per-company query strategies
+    # without touching any code — just add "query_prompt_template" to the cache JSON.
+    prompt_template = str(research.get("query_prompt_template") or _QUERY_GEN_PROMPT)
+    prompt = prompt_template.format(
         company_name=research.get("company_summary", "")[:200],
         region=region,
         icp_types=icp_types,
