@@ -38,7 +38,7 @@ _SCOPES = [
 ]
 
 # Column order in the sheet. Must match CLAUDE.md schema.
-_HEADERS = ["company_name", "website", "country", "date_added"]
+_HEADERS = ["company_name", "website", "country", "source", "search_query", "date_added"]
 
 
 # ─── Authentication ────────────────────────────────────────────────────────────
@@ -187,13 +187,13 @@ def append_leads(spreadsheet_id: str, leads: list[dict]) -> int:
     """
     Append validated lead rows to the Google Sheet.
 
-    Each lead becomes one row: company_name | website | country | date_added.
+    Each lead becomes one row: company_name | website | country | source | search_query | date_added.
     Uses INSERT_ROWS to append below existing data without overwriting.
 
     Args:
         spreadsheet_id: The Google Sheets spreadsheet ID.
-        leads: List of lead dicts. Expected keys: company_name, website, country.
-               date_added is added automatically (today's date).
+        leads: List of lead dicts. Expected keys: company_name, website, country,
+               source, search_query. date_added is added automatically (today's date).
 
     Returns:
         Number of rows successfully written. Returns 0 on error.
@@ -207,6 +207,8 @@ def append_leads(spreadsheet_id: str, leads: list[dict]) -> int:
             lead.get("company_name", ""),
             lead.get("website", ""),
             lead.get("country", ""),
+            lead.get("source", ""),
+            lead.get("search_query", ""),
             today,
         ]
         for lead in leads

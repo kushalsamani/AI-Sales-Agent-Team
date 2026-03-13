@@ -20,10 +20,35 @@ TOKEN EFFICIENCY SUMMARY (per run):
 
 import json
 import math
+import re
 
 from agents import research_agent
 from tools import llm, serper_search, google_places, sheets
 import config
+
+
+# ─── Garbage Domain Blocklist ─────────────────────────────────────────────────
+# These domains should NEVER appear as leads regardless of what search returns.
+# Checked before LLM validation — saves tokens and prevents garbage in sheet.
+_GARBAGE_DOMAINS = {
+    # Reference / encyclopaedia
+    "wikipedia.org", "wikimedia.org",
+    # Maps / navigation
+    "mapquest.com", "maps.google.com", "openstreetmap.org",
+    # Social media
+    "linkedin.com", "facebook.com", "twitter.com", "x.com",
+    "instagram.com", "youtube.com", "tiktok.com",
+    # Job / review sites
+    "glassdoor.com", "indeed.com", "ziprecruiter.com",
+    # Business directories
+    "yellowpages.com", "yelp.com", "manta.com", "bbb.org",
+    "dnb.com", "zoominfo.com", "crunchbase.com", "bloomberg.com",
+    "hoovers.com", "bizapedia.com", "corporationwiki.com",
+    # Generic web
+    "google.com", "bing.com", "yahoo.com", "reddit.com",
+    "quora.com", "medium.com", "wordpress.com", "blogspot.com",
+    "amazon.com", "ebay.com", "alibaba.com",
+}
 
 
 # ─── Prompts ──────────────────────────────────────────────────────────────────
@@ -32,24 +57,28 @@ _QUERY_GEN_PROMPT = """
 Generate specific Google search queries to find B2B companies that would purchase
 industrial products in a target region.
 
-SELLER:
-  Company: {company_name}
-  Products: {products}
+SELLER: {company_name}
 
 TARGET REGION: {region}
 
 ICP TYPES TO FIND:
 {icp_types}
 
-SUGGESTED QUERY TEMPLATES (replace {{region}} with actual region):
-{templates}
+PART 1 — DISTRIBUTOR QUERIES (generate exactly one query per product below — use the
+exact product name, never replace it with a generic term like "valve" or "pipe"):
+{products_list}
+
+PART 2 — EPC QUERIES (generate one query per template below, keep "PTFE PFA" at the end):
+{epc_templates}
 
 INSTRUCTIONS:
-  - Replace {{region}} in each template with "{region}" and its regional variations
-    (e.g. for "Texas, USA" also try "Houston", "Dallas", "TX").
-  - Generate 15 to 20 diverse queries spanning all ICP types.
+  - Replace {{region}} with "{region}" or a major city/subregion
+    (e.g. for "Texas, USA" use "Texas", "Houston", "Dallas", or "TX" — vary across queries).
+  - For PART 1 (Distributors): output one query per product in the format
+    "{{region}} {{exact product name}} distributor" or "{{region}} {{exact product name}} supplier".
+    Every single product above must appear in its own query — do not skip any.
+  - For PART 2 (EPC): keep "PTFE PFA" at the end of every EPC query.
   - Queries must return company websites, not articles, news, or directories.
-  - Mix product-specific, industry-specific, and role-specific queries.
   - Make each query distinct — avoid near-duplicates.
 
 Return ONLY a JSON array of query strings, no other text:
@@ -72,16 +101,27 @@ WHO TO INCLUDE (ICP — Ideal Customer Profile):
 WHO TO EXCLUDE (Anti-ICP):
 {anti_icp_summary}
 
-ALSO EXCLUDE:
+ALSO EXCLUDE — STRICTLY:
   - Companies that clearly manufacture or produce the same products as the seller.
   - Companies obviously outside the target region: {region}
   - Companies with no clear industry relevance.
-  - Any duplicate entries.
+  - Duplicate company names (same company, different URL).
+  - Government bodies, municipalities, city departments, public utilities.
+  - Reference websites (wikipedia.org, mapquest.com, city hall sites, etc.).
+  - Any website that is not the company's own official website.
+  - Very large Fortune 100 multinationals with established global supplier programs
+    (e.g. ExxonMobil, Shell, Dow, BASF) — they have rigid vendor approval processes
+    that make cold outreach ineffective. Focus on mid-size companies instead.
 
 CANDIDATES ({n} companies):
 {candidates_json}
 
+Each candidate has: company_name, website, country, and snippet (Google's description
+of the page — may be empty for some candidates). Use the snippet as your primary signal
+for judging relevance. If snippet is empty, use the company name and domain.
+
 For each qualifying company:
+  - Use the snippet, name, and domain together to determine relevance.
   - Use context clues (website, name, snippet) to determine the country.
   - If country cannot be determined, default to the primary country in: "{region}".
   - Clean up the company name if it contains junk (e.g. " | LinkedIn", " - Home").
@@ -182,16 +222,26 @@ def _generate_queries(research: dict, region: str) -> list[str]:
         f"  - {p['type']}: {p['description']}"
         for p in research.get("icp_profiles", [])
     )
-    templates = "\n".join(
-        f"  - {t}" for t in research.get("search_query_templates", [])
+    # EPC templates only — exclude section labels and distributor/supplier lines.
+    # Products are handled separately in PART 2 of the prompt.
+    all_templates: list = research.get("search_query_templates") or []
+    epc_templates = "\n".join(
+        f"  - {t}" for t in all_templates
+        if isinstance(t, str)
+        and t.startswith('"')
+        and "distributor" not in t.lower()
+        and "supplier" not in t.lower()
     )
+    # Products list: one bullet per product for the distributor track.
+    all_products: list = research.get("products") or []
+    products_list = "\n".join(f"  - {p}" for p in all_products if isinstance(p, str))
 
     prompt = _QUERY_GEN_PROMPT.format(
         company_name=research.get("company_summary", "")[:200],
-        products=", ".join(research.get("products", [])),
         region=region,
         icp_types=icp_types,
-        templates=templates,
+        epc_templates=epc_templates,
+        products_list=products_list,
     )
 
     try:
@@ -216,12 +266,15 @@ def _execute_searches(queries: list[str]) -> list[dict]:
     Deduplication here is intra-run only (same domain appearing in multiple queries).
     Cross-run deduplication (against the sheet) happens in _deduplicate().
 
+    Each candidate is tagged with 'source' ("Google Search" or "Google Places")
+    and 'search_query' (the query that produced it) for sheet tracking.
+
     Args:
         queries: List of search query strings.
 
     Returns:
-        List of raw candidate dicts with keys: company_name, website, country.
-        All domains are normalised. No duplicates within this list.
+        List of raw candidate dicts with keys: company_name, website, country,
+        source, search_query. All domains are normalised. No duplicates within this list.
     """
     seen_domains: set[str] = set()
     candidates: list[dict] = []
@@ -234,17 +287,21 @@ def _execute_searches(queries: list[str]) -> list[dict]:
             candidate = _parse_serper_result(result)
             if candidate:
                 domain = sheets.normalize_domain(candidate["website"])
-                if domain and domain not in seen_domains:
+                if domain and domain not in seen_domains and not _is_garbage_domain(domain):
                     seen_domains.add(domain)
                     candidate["website"] = domain
+                    candidate["source"] = "Google Search"
+                    candidate["search_query"] = query
                     candidates.append(candidate)
 
         # Google Places (catches businesses with poor/no SEO).
         for place in google_places.search_places(query):
             domain = sheets.normalize_domain(place.get("website", ""))
-            if domain and domain not in seen_domains:
+            if domain and domain not in seen_domains and not _is_garbage_domain(domain):
                 seen_domains.add(domain)
                 place["website"] = domain
+                place["source"] = "Google Places"
+                place["search_query"] = query
                 candidates.append(place)
 
     return candidates
@@ -252,21 +309,36 @@ def _execute_searches(queries: list[str]) -> list[dict]:
 
 def _deduplicate(candidates: list[dict], existing_domains: set[str]) -> list[dict]:
     """
-    Remove candidates whose domains already exist in the Google Sheet.
+    Remove candidates already in the sheet and deduplicate by company name.
 
-    Pure Python — no LLM tokens. O(1) per lookup due to set structure.
+    Two checks — both pure Python, zero LLM tokens:
+      1. Domain check: skip if domain already in the Google Sheet.
+      2. Name check: skip if a company with the same normalised name already
+         passed (catches same company appearing with two different URLs,
+         e.g. exxonmobil.com and corporate.exxonmobil.com).
 
     Args:
         candidates:       Raw candidates from _execute_searches.
         existing_domains: Normalised domains already in the sheet.
 
     Returns:
-        Filtered list containing only net-new candidates.
+        Filtered list containing only net-new, name-unique candidates.
     """
-    return [
-        c for c in candidates
-        if sheets.normalize_domain(c.get("website", "")) not in existing_domains
-    ]
+    seen_names: set[str] = set()
+    result: list[dict] = []
+
+    for c in candidates:
+        domain = sheets.normalize_domain(c.get("website", ""))
+        if domain in existing_domains:
+            continue
+        name_key = _normalize_name(c.get("company_name", ""))
+        if name_key and name_key in seen_names:
+            continue
+        if name_key:
+            seen_names.add(name_key)
+        result.append(c)
+
+    return result
 
 
 def _validate_in_batches(
@@ -280,14 +352,27 @@ def _validate_in_batches(
     Each batch is one LLM call. Stops early once MAX_LEADS_PER_RUN is reached
     to avoid unnecessary API calls.
 
+    After LLM validation, source and search_query are re-attached from the
+    original candidates using domain lookup (zero extra LLM tokens).
+
     Args:
-        candidates: New candidates from _deduplicate.
+        candidates: New candidates from _deduplicate (include source, search_query).
         research:   ICP research dict from research_agent.
         region:     Target region string.
 
     Returns:
-        List of validated lead dicts (company_name, website, country).
+        List of validated lead dicts (company_name, website, country, source, search_query).
     """
+    # Build domain → metadata lookup for re-attaching source/search_query after validation.
+    metadata_by_domain: dict[str, dict] = {}
+    for c in candidates:
+        domain = sheets.normalize_domain(c.get("website", ""))
+        if domain:
+            metadata_by_domain[domain] = {
+                "source": c.get("source", ""),
+                "search_query": c.get("search_query", ""),
+            }
+
     icp_summary = "\n".join(
         f"  - {p['type']}: {p['why_they_buy']}"
         for p in research.get("icp_profiles", [])
@@ -312,11 +397,13 @@ def _validate_in_batches(
         print(f"  Batch {batch_num}/{total_batches} — {len(batch)} candidates...")
 
         # Send only the fields the LLM needs — reduces input tokens.
+        # snippet is included for Serper results; empty string for Places results.
         slim_batch = [
             {
                 "company_name": c.get("company_name", ""),
                 "website": c.get("website", ""),
                 "country": c.get("country", ""),
+                "snippet": c.get("snippet", ""),
             }
             for c in batch
         ]
@@ -335,11 +422,70 @@ def _validate_in_batches(
             # Low temperature — we want precise, consistent filtering, not creativity.
             result = llm.generate_json(prompt, temperature=0.1)
             if isinstance(result, list):
+                # Re-attach source and search_query from pre-validation metadata.
+                for lead in result:
+                    domain = sheets.normalize_domain(lead.get("website", ""))
+                    meta = metadata_by_domain.get(domain, {})
+                    lead["source"] = meta.get("source", "")
+                    lead["search_query"] = meta.get("search_query", "")
                 validated.extend(result)
         except ValueError as e:
             print(f"  [WARN] Batch {batch_num} validation failed: {e}. Skipping batch.")
 
     return validated
+
+
+# ─── Filter Helpers ───────────────────────────────────────────────────────────
+
+def _is_garbage_domain(domain: str) -> bool:
+    """
+    Return True if the domain should never be a lead.
+
+    Checks against the blocklist and also flags government/municipal domains
+    (.gov, city hall patterns) and domains clearly not company websites.
+
+    Args:
+        domain: Normalised root domain string (e.g. 'wikipedia.org').
+
+    Returns:
+        True if the domain should be discarded before LLM validation.
+    """
+    if not domain:
+        return True
+    # Exact blocklist match.
+    if domain in _GARBAGE_DOMAINS:
+        return True
+    # Any subdomain of a blocklisted domain.
+    if any(domain.endswith("." + g) for g in _GARBAGE_DOMAINS):
+        return True
+    # Government / public sector domains.
+    if domain.endswith(".gov") or domain.endswith(".gov.uk") or domain.endswith(".gc.ca"):
+        return True
+    return False
+
+
+def _normalize_name(name: str) -> str:
+    """
+    Normalise a company name for duplicate detection.
+
+    Lowercases, strips legal suffixes (LLC, Inc, Ltd, Corp, Co),
+    and collapses whitespace so 'ExxonMobil Corp' and 'ExxonMobil LLC'
+    are treated as the same company.
+
+    Args:
+        name: Raw company name string.
+
+    Returns:
+        Normalised string key, or empty string if name is blank.
+    """
+    if not name:
+        return ""
+    n = name.lower().strip()
+    # Remove common legal suffixes.
+    n = re.sub(r"\b(llc|inc|ltd|corp|co|gmbh|plc|ag|bv|sas|srl|pty|limited|incorporated|corporation|company)\b\.?", "", n)
+    # Collapse whitespace.
+    n = re.sub(r"\s+", " ", n).strip()
+    return n
 
 
 # ─── Parsing Helpers ──────────────────────────────────────────────────────────
@@ -378,6 +524,7 @@ def _parse_serper_result(result: dict) -> dict | None:
         "company_name": name,
         "website": link,   # Will be normalised by caller.
         "country": "",     # Determined by LLM during validation.
+        "snippet": result.get("snippet", "")[:200],  # Google's description of the page.
     }
 
 

@@ -31,7 +31,7 @@ GOOGLE_SHEETS_CREDENTIALS_FILE: str = os.getenv(
 
 
 # ─── Runtime Settings ────────────────────────────────────────────────────────
-MAX_LEADS_PER_RUN: int     = int(os.getenv("MAX_LEADS_PER_RUN", "100"))
+MAX_LEADS_PER_RUN: int     = int(os.getenv("MAX_LEADS_PER_RUN", "500"))
 VALIDATION_BATCH_SIZE: int = int(os.getenv("VALIDATION_BATCH_SIZE", "25"))
 SEARCHES_PER_QUERY: int    = int(os.getenv("SEARCHES_PER_QUERY", "10"))
 
