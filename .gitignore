@@ -3,6 +3,9 @@
 credentials.json
 token.json
 
+# Claude project memory — local only
+CLAUDE.md
+
 # Research cache — ignore generated JSON files, keep directory structure
 cache/research/*.json
 
