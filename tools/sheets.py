@@ -42,7 +42,7 @@ _HEADERS = ["company_name", "website", "country", "source", "search_query", "dat
 
 # Name and column order for the Rejected Companies tab.
 _REJECTED_SHEET_NAME = "Rejected Companies"
-_REJECTED_HEADERS = ["company_name", "website", "country", "source", "search_query", "date_added"]
+_REJECTED_HEADERS = ["company_name", "website", "country", "source", "search_query", "date_added", "rejection_reason"]
 
 
 # ─── Authentication ────────────────────────────────────────────────────────────
@@ -262,6 +262,7 @@ def append_rejected_leads(spreadsheet_id: str, rejected: list[dict]) -> int:
             r.get("source", ""),
             r.get("search_query", ""),
             today,
+            r.get("rejection_reason", ""),
         ]
         for r in rejected
     ]

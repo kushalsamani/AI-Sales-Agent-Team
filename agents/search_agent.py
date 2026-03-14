@@ -90,8 +90,9 @@ Return ONLY a JSON array of query strings, no other text:
 """
 
 _VALIDATION_PROMPT = """
-You are a B2B sales qualification expert. Review the candidate companies below
-and return ONLY those that are genuine potential buyers for this seller.
+You are a B2B lead filter. Your job is to REMOVE obvious garbage from a list of
+candidate companies. Keep everything that could plausibly be a buyer. When in doubt,
+keep the company — it is better to pass a borderline company than to reject a real lead.
 
 SELLER:
   {company_summary}
@@ -99,39 +100,48 @@ SELLER:
 
 TARGET REGION: {region}
 
-WHO TO INCLUDE (ICP — Ideal Customer Profile):
+CONTEXT — WHO BUYS FROM THIS SELLER:
 {icp_summary}
 
-WHO TO EXCLUDE (Anti-ICP):
-{anti_icp_summary}
+REMOVE a candidate ONLY if it clearly meets one of these conditions:
+  1. WRONG GEOGRAPHY: The company is clearly and obviously located outside "{region}".
+     Do NOT remove a company just because the country field is blank or uncertain.
+  2. COMPLETELY UNRELATED INDUSTRY: The company has no conceivable reason to ever buy
+     these products (e.g. a law firm, a school, a restaurant, a retail clothing store).
+  3. NOT A COMPANY WEBSITE: The result is a directory, news article, Wikipedia page,
+     government body, municipality, or other non-company site.
+  4. SAME PRODUCT MANUFACTURER: The company clearly manufactures the exact same products
+     as the seller and is a direct competitor.
 
-ALSO EXCLUDE — STRICTLY:
-  - Companies that clearly manufacture or produce the same products as the seller.
-  - Companies obviously outside the target region: {region}
-  - Companies with no clear industry relevance.
-  - Duplicate company names (same company, different URL).
-  - Government bodies, municipalities, city departments, public utilities.
-  - Reference websites (wikipedia.org, mapquest.com, city hall sites, etc.).
-  - Any website that is not the company's own official website.
-  - Large Fortune 100 multinationals with rigid vendor approval processes
-    and established global supplier programs — cold outreach is rarely effective
-    with these companies. Focus on mid-size companies instead.
+DO NOT remove a company because:
+  - You are unsure whether they would buy — keep it.
+  - The snippet is vague or missing — keep it.
+  - They also carry competing or substitute product lines alongside relevant ones.
+  - They seem too small or too large.
+  - Their focus seems adjacent rather than exact — keep anything in the same broad industry.
+
+ANTI-ICP TO KEEP IN MIND (but do not use as strict disqualifiers — only remove if obviously true):
+{anti_icp_summary}
 
 CANDIDATES ({n} companies):
 {candidates_json}
 
 Each candidate has: company_name, website, country, and snippet (Google's description
-of the page — may be empty for some candidates). Use the snippet as your primary signal
-for judging relevance. If snippet is empty, use the company name and domain.
+of the page — may be empty for some candidates).
 
-For each qualifying company:
-  - Use the snippet, name, and domain together to determine relevance.
+For each company you keep:
   - Use context clues (website, name, snippet) to determine the country.
   - If country cannot be determined, default to the primary country in: "{region}".
   - Clean up the company name if it contains junk (e.g. " | LinkedIn", " - Home").
 
-Return ONLY a JSON array. Return [] if no candidates qualify. No explanation:
-[{{"company_name": "...", "website": "...", "country": "..."}}]
+Return ONLY a JSON object with two keys. No explanation:
+{{
+  "validated": [{{"company_name": "...", "website": "...", "country": "..."}}],
+  "rejected":  [{{"company_name": "...", "website": "...", "country": "...", "rejection_reason": "one short sentence"}}]
+}}
+The "rejection_reason" must be a concise plain-English sentence explaining why the company
+was removed (e.g. "Located in Germany, not in the target region." or "Manufactures PTFE
+lined pipes — direct competitor." or "Consumer retail store, no industrial relevance.").
 """
 
 
@@ -367,7 +377,8 @@ def _validate_in_batches(
     After LLM validation, source and search_query are re-attached from the
     original candidates using domain lookup (zero extra LLM tokens).
 
-    Only candidates that were actually sent to the LLM are counted as rejected.
+    Rejection reasons come directly from the LLM response — each rejected company
+    includes a concise sentence explaining why it was removed.
     Candidates skipped due to early stopping are not logged as rejected.
 
     Args:
@@ -397,8 +408,7 @@ def _validate_in_batches(
     )
 
     validated: list[dict] = []
-    processed_domains: set[str] = set()   # domains actually sent to the LLM
-    validated_domains: set[str] = set()   # domains that passed validation
+    rejected_with_reasons: list[dict] = []
     batch_size = config.VALIDATION_BATCH_SIZE
     total_batches = math.ceil(len(candidates) / batch_size)
 
@@ -411,12 +421,6 @@ def _validate_in_batches(
 
         batch = candidates[i : i + batch_size]
         print(f"  Batch {batch_num}/{total_batches} — {len(batch)} candidates...")
-
-        # Track every domain sent to the LLM so we can identify rejections later.
-        for c in batch:
-            domain = sheets.normalize_domain(c.get("website", ""))
-            if domain:
-                processed_domains.add(domain)
 
         # Send only the fields the LLM needs — reduces input tokens.
         # snippet is included for Serper results; empty string for Places results.
@@ -443,27 +447,28 @@ def _validate_in_batches(
         try:
             # Low temperature — we want precise, consistent filtering, not creativity.
             result = llm.generate_json(prompt, temperature=0.1)
-            if isinstance(result, list):
-                # Re-attach source and search_query from pre-validation metadata.
-                for lead in result:
+            if isinstance(result, dict):
+                # Re-attach source and search_query to validated companies.
+                for lead in result.get("validated", []):
                     domain = sheets.normalize_domain(lead.get("website", ""))
                     if domain:
-                        validated_domains.add(domain)
                         meta = candidate_by_domain.get(domain, {})
                         lead["source"] = meta.get("source", "")
                         lead["search_query"] = meta.get("search_query", "")
-                validated.extend(result)
+                validated.extend(result.get("validated", []))
+
+                # Re-attach source, search_query, and keep the rejection_reason.
+                for rej in result.get("rejected", []):
+                    domain = sheets.normalize_domain(rej.get("website", ""))
+                    if domain and domain in candidate_by_domain:
+                        meta = candidate_by_domain[domain]
+                        rej["source"] = meta.get("source", "")
+                        rej["search_query"] = meta.get("search_query", "")
+                        rejected_with_reasons.append(rej)
         except ValueError as e:
             print(f"  [WARN] Batch {batch_num} validation failed: {e}. Skipping batch.")
 
-    # Rejected = processed by LLM but not in the validated set.
-    rejected: list[dict] = [
-        candidate_by_domain[d]
-        for d in processed_domains
-        if d not in validated_domains and d in candidate_by_domain
-    ]
-
-    return validated, rejected
+    return validated, rejected_with_reasons
 
 
 # ─── Filter Helpers ───────────────────────────────────────────────────────────
