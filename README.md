@@ -1,6 +1,6 @@
-# AI Sales Agent — Lead Research Module
+# AI Sales Agent: Lead Research Module
 
-An AI-powered, multi-agent B2B lead generation system. Give it a company name and a target region — it researches the industry, identifies the ideal customer profile (ICP), searches for matching companies across multiple sources, deduplicates against your existing leads, and writes a clean, validated list directly to Google Sheets.
+An AI-powered, multi-agent B2B lead generation system. Give it a company name and a target region, and it researches the industry, identifies the ideal customer profile (ICP), searches for matching companies across multiple sources, deduplicates against your existing leads, and writes a clean, validated list directly to Google Sheets.
 
 Designed to be **company-agnostic**: point it at any company in any industry and it figures out who to target.
 
@@ -25,11 +25,11 @@ Input: --company "Your Company" --region "Your Region"  (e.g. "Texas, USA", "Ger
    │                     │
    │  1. Load Sheet      │  Reads existing leads from Google Sheets.
    │                     │  Builds a domain set for deduplication.
-   │                     │  (Pure Python — zero LLM tokens.)
+   │                     │  (Pure Python, zero LLM tokens.)
    │                     │
    │  2. Query Gen       │  One Gemini call generates ~22 targeted
    │                     │  search queries driven by product groups,
-   │                     │  buyer vocabulary, and ICP types — all from
+   │                     │  buyer vocabulary, and ICP types, all from
    │                     │  the research cache. Region is fixed exactly
    │                     │  as passed (no city rotation).
    │                     │
@@ -45,15 +45,15 @@ Input: --company "Your Company" --region "Your Region"  (e.g. "Texas, USA", "Ger
    │                     │  Removes competitors, irrelevant companies,
    │                     │  and out-of-region results.
    │                     │
-   │  6. Write           │  Validated leads → Leads tab.
-   │                     │  Rejected companies → Rejected Companies tab.
+   │  6. Write           │  Validated leads go to the Leads tab.
+   │                     │  Rejected companies go to Rejected Companies tab.
    │                     │  Both in the same Google Sheet.
    └─────────────────────┘
              │
              ▼
-   Google Sheets — one spreadsheet per company, two tabs:
-     • Leads              — companies that passed ICP validation
-     • Rejected Companies — companies that were processed but did not pass
+   Google Sheets: one spreadsheet per company, two tabs:
+     • Leads              - companies that passed ICP validation
+     • Rejected Companies - companies that were processed but did not pass
 ```
 
 ---
@@ -65,10 +65,10 @@ AI-Sales-Agent/
 ├── main.py                     # CLI entry point
 ├── config.py                   # All settings loaded from .env
 ├── requirements.txt
-├── .env                        # API keys — not committed, never share this
+├── .env                        # API keys, not committed, never share this
 │
 ├── agents/
-│   ├── research_agent.py       # ICP research — runs once, cached per company
+│   ├── research_agent.py       # ICP research, runs once, cached per company
 │   └── search_agent.py         # Full pipeline orchestration
 │
 ├── tools/
@@ -79,14 +79,14 @@ AI-Sales-Agent/
 │
 ├── cache/
 │   └── research/               # Cached ICP research JSON, one file per company
-│                               # Not committed — generated automatically on first run.
+│                               # Not committed, generated automatically on first run.
 │                               # For better results, the cache can be manually edited
 │                               # to refine product groups, buyer vocabulary, ICP profiles,
 │                               # and anti-ICP rules for your specific company and industry.
 │
 └── data/
-    └── spreadsheets.json       # Maps company names → Google Sheet IDs
-                                # Not committed — generated automatically on first run.
+    └── spreadsheets.json       # Maps company names to Google Sheet IDs
+                                # Not committed, generated automatically on first run.
 ```
 
 ---
@@ -110,16 +110,16 @@ Minimising LLM API cost is a core design constraint.
 
 One spreadsheet per company with two tabs.
 
-**Leads tab** — companies that passed ICP validation. For example:
+**Leads tab**: companies that passed ICP validation. For example:
 
 | company_name | website | country | source | search_query | date_added |
 |---|---|---|---|---|---|
 | ABC company | abccompany.com | USA | Google Search | The search query this company came from | 2026-03-13 |
 | XYZ company | xyzcompany.com | Canada | Google Places | The search query this company came from | 2026-03-12 |
 
-**Rejected Companies tab** — companies processed by the LLM but did not pass validation. Same columns as Leads. Useful for auditing what was filtered and why the search is surfacing certain results.
+**Rejected Companies tab**: companies processed by the LLM but did not pass validation. Same columns as Leads. Useful for auditing what was filtered and why the search is surfacing certain results.
 
-- **source**: `Google Search` or `Google Places` — which API found this company.
+- **source**: `Google Search` or `Google Places`, indicating which API found this company.
 - **search_query**: The exact query that surfaced this company.
 - **country**: Comma-separated if multi-country (e.g. `USA, UK, India`).
 - **date_added**: ISO date (YYYY-MM-DD), set automatically.
@@ -140,7 +140,7 @@ pip install -r requirements.txt
 Copy `.env` and fill in your keys:
 
 ```
-GEMINI_API_KEY=...                      # Google AI Studio — free tier available
+GEMINI_API_KEY=...                      # Google AI Studio, free tier available
 GEMINI_MODEL=gemini-2.5-flash           # Swap model here without touching code
 
 SERPER_API_KEY=...                      # serper.dev
@@ -148,7 +148,7 @@ GOOGLE_PLACES_API_KEY=...               # Google Cloud Console
 
 GOOGLE_SHEETS_CREDENTIALS_FILE=credentials.json
 
-# Optional — defaults shown:
+# Optional, defaults shown:
 MAX_LEADS_PER_RUN=500                   # Hard cap on leads written per run
 VALIDATION_BATCH_SIZE=30                # Candidates per LLM validation call
 SEARCHES_PER_QUERY=20                   # Results fetched per search query
@@ -157,11 +157,11 @@ SEARCHES_PER_QUERY=20                   # Results fetched per search query
 ### 3. Google Sheets (one-time setup)
 
 1. Go to [console.cloud.google.com](https://console.cloud.google.com)
-2. Create a project → enable **Google Sheets API** and **Google Drive API**
-3. APIs & Services → Credentials → **Create OAuth 2.0 Client ID** (Desktop app)
-4. Download the JSON → save as `credentials.json` in the project root
-5. Run the program — a browser window opens once for authorisation
-6. `token.json` is saved automatically — no browser needed after this
+2. Create a project and enable **Google Sheets API** and **Google Drive API**
+3. APIs & Services > Credentials > **Create OAuth 2.0 Client ID** (Desktop app)
+4. Download the JSON and save as `credentials.json` in the project root
+5. Run the program; a browser window opens once for authorisation
+6. `token.json` is saved automatically, no browser needed after this
 
 ### 4. Run
 
@@ -187,12 +187,12 @@ python main.py --company "Your Company Name" --region "Germany" --force-research
 | Google Places | [Google Cloud Console](https://console.cloud.google.com) |
 | Google Sheets | Same Google Cloud project as Places |
 
-Check each provider's current pricing page — plans and free tiers change over time. LLM costs per run are very low (typically under $0.05 for Gemini 2.5 Flash at standard usage).
+Check each provider's current pricing page; plans and free tiers change over time. LLM costs per run are very low (typically under $0.05 for Gemini 2.5 Flash at standard usage).
 
 ---
 
 ## Roadmap
 
-- **v1 (current):** Lead discovery — company name, website, country written to Google Sheets.
-- **v2:** Contact enrichment — find general company emails and priority decision-maker contacts (procurement, purchasing, directors) for each discovered company.
-- **v3:** Web UI — browser-based interface wrapping the same agent pipeline.
+- **v1 (current):** Lead discovery, company name, website, and country written to Google Sheets.
+- **v2:** Contact enrichment, find general company emails and priority decision-maker contacts (procurement, purchasing, directors) for each discovered company.
+- **v3:** Web UI, browser-based interface wrapping the same agent pipeline.
