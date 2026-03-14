@@ -113,7 +113,7 @@ ALSO EXCLUDE — STRICTLY:
   - Government bodies, municipalities, city departments, public utilities.
   - Reference websites (wikipedia.org, mapquest.com, city hall sites, etc.).
   - Any website that is not the company's own official website.
-  - Very large Fortune 100 multinationals with rigid vendor approval processes
+  - Large Fortune 100 multinationals with rigid vendor approval processes
     and established global supplier programs — cold outreach is rarely effective
     with these companies. Focus on mid-size companies instead.
 
