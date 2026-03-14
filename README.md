@@ -86,6 +86,7 @@ AI-Sales-Agent/
 │
 └── data/
     └── spreadsheets.json       # Maps company names → Google Sheet IDs
+                                # Not committed — generated automatically on first run.
 ```
 
 ---
@@ -109,11 +110,12 @@ Minimising LLM API cost is a core design constraint.
 
 One spreadsheet per company with two tabs.
 
-**Leads tab** — companies that passed ICP validation:
+**Leads tab** — companies that passed ICP validation. For example:
 
 | company_name | website | country | source | search_query | date_added |
 |---|---|---|---|---|---|
-| ABC Industrial Supply | abcindustrial.com | USA | Google Search | Texas, USA industrial pipe fittings distributor | 2026-03-13 |
+| ABC company | abccompany.com | USA | Google Search | The search query this company came from | 2026-03-13 |
+| XYZ company | xyzcompany.com | Canada | Google Places | The search query this company came from | 2026-03-12 |
 
 **Rejected Companies tab** — companies processed by the LLM but did not pass validation. Same columns as Leads. Useful for auditing what was filtered and why the search is surfacing certain results.
 
