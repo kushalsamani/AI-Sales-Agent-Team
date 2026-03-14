@@ -9,7 +9,7 @@ Designed to be **company-agnostic**: point it at any company in any industry and
 ## How It Works
 
 ```
-Input: --company "Your Company" --region "Texas, USA"
+Input: --company "Your Company" --region "Your Region"  (e.g. "Texas, USA", "Germany", "Ontario, Canada")
              │
              ▼
    ┌─────────────────────┐
@@ -109,7 +109,7 @@ One spreadsheet per company with two tabs.
 
 | company_name | website | country | source | search_query | date_added |
 |---|---|---|---|---|---|
-| ABC Industrial Supply | abcindustrial.com | USA | Google Search | Houston, TX PTFE lined pipes distributor | 2026-03-13 |
+| ABC Industrial Supply | abcindustrial.com | USA | Google Search | Texas, USA PTFE lined pipes distributor | 2026-03-13 |
 
 **Rejected Companies tab** — companies processed by the LLM but did not pass validation. Same columns as Leads. Useful for auditing what was filtered and why the search is surfacing certain results.
 
@@ -137,8 +137,8 @@ Copy `.env` and fill in your keys:
 GEMINI_API_KEY=...                      # Google AI Studio — free tier available
 GEMINI_MODEL=gemini-2.5-flash           # Swap model here without touching code
 
-SERPER_API_KEY=...                      # serper.dev — 2,500 free searches/month
-GOOGLE_PLACES_API_KEY=...               # Google Cloud — $200 free credit/month
+SERPER_API_KEY=...                      # serper.dev
+GOOGLE_PLACES_API_KEY=...               # Google Cloud Console
 
 GOOGLE_SHEETS_CREDENTIALS_FILE=credentials.json
 
