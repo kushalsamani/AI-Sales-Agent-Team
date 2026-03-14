@@ -80,8 +80,8 @@ INSTRUCTIONS:
     "[region] [product group] distributor". Every group must appear in at least one query.
   - BUYER VOCABULARY queries: for each vocabulary term, generate one query in the format
     "[region] [vocab term] distributor".
-  - ICP TYPE queries: for each non-distributor ICP type (e.g. EPC firms), generate
-    additional queries using that ICP type's keywords and industry context.
+  - ICP TYPE queries: for each non-distributor ICP type, generate additional
+    queries using that ICP type's keywords and industry context.
   - Queries must return company websites, not articles, news, or directories.
   - Make each query distinct — no near-duplicates.
 
@@ -113,9 +113,9 @@ ALSO EXCLUDE — STRICTLY:
   - Government bodies, municipalities, city departments, public utilities.
   - Reference websites (wikipedia.org, mapquest.com, city hall sites, etc.).
   - Any website that is not the company's own official website.
-  - Very large Fortune 100 multinationals with established global supplier programs
-    (e.g. ExxonMobil, Shell, Dow, BASF) — they have rigid vendor approval processes
-    that make cold outreach ineffective. Focus on mid-size companies instead.
+  - Very large Fortune 100 multinationals with rigid vendor approval processes
+    and established global supplier programs — cold outreach is rarely effective
+    with these companies. Focus on mid-size companies instead.
 
 CANDIDATES ({n} companies):
 {candidates_json}
@@ -232,7 +232,7 @@ def _generate_queries(research: dict, region: str) -> list[str]:
         for p in research.get("icp_profiles", [])
     )
 
-    # Product groups: grouped families of products (e.g. "PTFE lined pipes and fittings").
+    # Product groups: grouped families of products (e.g. "industrial valves and fittings").
     # Falls back to the individual products list if product_groups is not in the cache.
     _raw_groups = research.get("product_groups") or research.get("products") or []
     all_product_groups: list[str] = [str(g) for g in _raw_groups if g]

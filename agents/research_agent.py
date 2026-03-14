@@ -51,8 +51,7 @@ _MAX_SNIPPET_CHARS   = 1500
 # ─── Prompt ───────────────────────────────────────────────────────────────────
 
 _RESEARCH_PROMPT = """
-You are a senior B2B sales strategist with deep expertise across industrial,
-chemical, manufacturing, process engineering, and distribution sectors.
+You are a senior B2B sales strategist with expertise across all industries and sectors.
 
 You have been given REAL, VERIFIED information about a company gathered directly
 from their website and search results. Use ONLY this information for your analysis.
@@ -66,25 +65,26 @@ Company: {company_name}
 
 Based strictly on the information above, produce a structured ICP analysis.
 Your goal: identify which types of companies are most likely to PURCHASE from
-this company — not companies that manufacture the same products.
+this company — not companies that manufacture or supply the same products.
 
 Think through:
 1. What does this company ACTUALLY sell (based on the info above)?
-2. Who are their real BUYERS? (distributors, EPCs, plant operators, contractors...)
-3. Who should be EXCLUDED? (manufacturers of the same product, raw material suppliers)
+2. Who are their real BUYERS? Consider the full range: resellers, distributors,
+   end-users, contractors, system integrators, procurement firms, engineering
+   firms, operators, or other business types. Base this entirely on what the
+   company sells and how those products or services are typically bought.
+3. Who should be EXCLUDED? (manufacturers of the same product, raw material
+   suppliers, competitors, or companies with no plausible use for these products)
 4. What search terms will find real buyers in any given region?
 
-CRITICAL — DISTRIBUTOR DISTINCTION:
-  There are two types of distributors. Get this right:
-  - INCLUDE as ICP: Specialized distributors focused on industrial piping,
-    process equipment, fluid handling, valves, or corrosion-resistant materials.
-    These companies RESELL specialized products to end-users in their region
-    and are key buyers.
-  - EXCLUDE as anti-ICP: General-purpose industrial distributors that carry
-    thousands of unrelated products (like Grainger or general hardware suppliers).
-    They are unlikely to stock niche specialized products.
-  If this company sells specialized industrial products, specialized distributors
-  must appear as an ICP profile.
+CHANNEL GUIDANCE:
+  If resellers or distributors are relevant for this company's products:
+  - INCLUDE as ICP: Specialized resellers focused on the specific product
+    category — they stock and resell to end-users and are genuine buyers.
+  - EXCLUDE as anti-ICP: General-purpose distributors carrying thousands of
+    unrelated product lines — they are unlikely to stock niche products.
+  Only include a distributor/reseller ICP if the company's products are
+  realistically sold through distribution channels.
 
 Return a single valid JSON object — no markdown, no extra text:
 
@@ -352,7 +352,7 @@ def _cache_path(company_name: str) -> str:
     Build the file path for a company's research cache.
 
     Converts the company name to a safe slug (lowercase, hyphens only).
-    Example: 'Advect Process Systems Canada Ltd.' → 'advect-process-systems-canada-ltd'
+    Example: 'Acme Industrial Supply Co.' → 'acme-industrial-supply-co'
     """
     os.makedirs(config.CACHE_DIR, exist_ok=True)
     slug = re.sub(r"[^\w\s-]", "", company_name.lower().strip())

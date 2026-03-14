@@ -9,6 +9,9 @@ CLAUDE.md
 # Research cache — ignore generated JSON files, keep directory structure
 cache/research/*.json
 
+# Company → spreadsheet ID mapping (contains private sheet IDs)
+data/spreadsheets.json
+
 # Python
 __pycache__/
 *.pyc

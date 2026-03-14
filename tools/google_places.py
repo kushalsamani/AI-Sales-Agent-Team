@@ -33,7 +33,7 @@ def search_places(query: str) -> list[dict]:
     a discoverable website are excluded to maintain data quality.
 
     Args:
-        query: Natural language query (e.g., "PTFE pipe distributors in Texas").
+        query: Natural language query (e.g., "industrial pipe distributors in Texas").
 
     Returns:
         List of dicts with keys:

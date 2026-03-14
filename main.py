@@ -4,9 +4,9 @@ main.py
 CLI entry point for the Lead Research Agent.
 
 Usage:
-  python main.py --company "Advect Process Systems Canada Ltd." --region "Texas, USA"
-  python main.py --company "Advect Process Systems Canada Ltd." --region "Germany"
-  python main.py --company "Advect Process Systems Canada Ltd." --region "South America" --force-research
+  python main.py --company "Your Company Name" --region "Texas, USA"
+  python main.py --company "Your Company Name" --region "Germany"
+  python main.py --company "Your Company Name" --region "South America" --force-research
 
 Arguments:
   --company         Full company name to generate leads for. (required)
@@ -35,16 +35,16 @@ def _parse_args() -> argparse.Namespace:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Examples:\n"
-            '  python main.py --company "Advect Process Systems Canada Ltd." --region "Texas, USA"\n'
-            '  python main.py --company "Advect Process Systems Canada Ltd." --region "Europe"\n'
-            '  python main.py --company "Advect Process Systems Canada Ltd." --region "Germany" --force-research'
+            '  python main.py --company "Your Company Name" --region "Texas, USA"\n'
+            '  python main.py --company "Your Company Name" --region "Europe"\n'
+            '  python main.py --company "Your Company Name" --region "Germany" --force-research'
         ),
     )
     parser.add_argument(
         "--company",
         required=True,
         metavar="NAME",
-        help='Full company name (e.g. "Advect Process Systems Canada Ltd.")',
+        help='Full company name (e.g. "Your Company Name")',
     )
     parser.add_argument(
         "--region",

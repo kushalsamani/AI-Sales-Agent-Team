@@ -65,7 +65,7 @@ AI-Sales-Agent/
 ├── main.py                     # CLI entry point
 ├── config.py                   # All settings loaded from .env
 ├── requirements.txt
-├── .env                        # API keys (not committed)
+├── .env                        # API keys — not committed, never share this
 │
 ├── agents/
 │   ├── research_agent.py       # ICP research — runs once, cached per company
@@ -79,6 +79,10 @@ AI-Sales-Agent/
 │
 ├── cache/
 │   └── research/               # Cached ICP research JSON, one file per company
+│                               # Not committed — generated automatically on first run.
+│                               # For better results, the cache can be manually edited
+│                               # to refine product groups, buyer vocabulary, ICP profiles,
+│                               # and anti-ICP rules for your specific company and industry.
 │
 └── data/
     └── spreadsheets.json       # Maps company names → Google Sheet IDs
@@ -109,7 +113,7 @@ One spreadsheet per company with two tabs.
 
 | company_name | website | country | source | search_query | date_added |
 |---|---|---|---|---|---|
-| ABC Industrial Supply | abcindustrial.com | USA | Google Search | Texas, USA PTFE lined pipes distributor | 2026-03-13 |
+| ABC Industrial Supply | abcindustrial.com | USA | Google Search | Texas, USA industrial pipe fittings distributor | 2026-03-13 |
 
 **Rejected Companies tab** — companies processed by the LLM but did not pass validation. Same columns as Leads. Useful for auditing what was filtered and why the search is surfacing certain results.
 
