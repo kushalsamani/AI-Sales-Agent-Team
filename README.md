@@ -27,8 +27,11 @@ Input: --company "Your Company" --region "Texas, USA"
    │                     │  Builds a domain set for deduplication.
    │                     │  (Pure Python — zero LLM tokens.)
    │                     │
-   │  2. Query Gen       │  One Gemini call generates 15–20 targeted
-   │                     │  search queries based on ICP + region.
+   │  2. Query Gen       │  One Gemini call generates ~22 targeted
+   │                     │  search queries driven by product groups,
+   │                     │  buyer vocabulary, and ICP types — all from
+   │                     │  the research cache. Region is fixed exactly
+   │                     │  as passed (no city rotation).
    │                     │
    │  3. Search          │  Executes queries via:
    │                     │    • Serper.dev  (Google search results)
@@ -38,15 +41,19 @@ Input: --company "Your Company" --region "Texas, USA"
    │  4. Dedup           │  Filters out companies already in the sheet.
    │                     │  Domain normalisation + set lookup. No LLM.
    │                     │
-   │  5. Validate        │  Sends candidates to Gemini in batches of 25.
+   │  5. Validate        │  Sends candidates to Gemini in batches of 30.
    │                     │  Removes competitors, irrelevant companies,
    │                     │  and out-of-region results.
    │                     │
-   │  6. Write           │  Appends validated leads to Google Sheets.
+   │  6. Write           │  Validated leads → Leads tab.
+   │                     │  Rejected companies → Rejected Companies tab.
+   │                     │  Both in the same Google Sheet.
    └─────────────────────┘
              │
              ▼
-   Google Sheets — one spreadsheet per company, one row per lead.
+   Google Sheets — one spreadsheet per company, two tabs:
+     • Leads              — companies that passed ICP validation
+     • Rejected Companies — companies that were processed but did not pass
 ```
 
 ---
@@ -88,7 +95,7 @@ Minimising LLM API cost is a core design constraint.
 | ICP Research | **Once ever** per company | Cached to `cache/research/` |
 | Query generation | **1** per run | Single structured prompt |
 | Deduplication | **0** | Python set of normalised domains |
-| Lead validation | **N / 25** per run | Batched, structured JSON output |
+| Lead validation | **N / 30** per run | Batched, structured JSON output |
 | Search execution | **0** | Direct API calls (Serper, Places) |
 | Sheet read/write | **0** | Google Sheets API |
 
@@ -96,16 +103,21 @@ Minimising LLM API cost is a core design constraint.
 
 ## Google Sheets Schema
 
-One spreadsheet per company. One sheet (tab) named **Leads**. One row per company.
+One spreadsheet per company with two tabs.
 
-| company_name | website | country | date_added |
-|---|---|---|---|
-| ABC Industrial Supply | abcindustrial.com | USA | 2026-03-13 |
-| XYZ Process Solutions | xyzprocess.de | Germany | 2026-03-13 |
+**Leads tab** — companies that passed ICP validation:
 
-- **country**: Comma-separated if the company operates in multiple countries (e.g. `USA, UK, India`).
-- **date_added**: ISO date (YYYY-MM-DD), set automatically on write.
-- The header row is frozen for easy filtering.
+| company_name | website | country | source | search_query | date_added |
+|---|---|---|---|---|---|
+| ABC Industrial Supply | abcindustrial.com | USA | Google Search | Houston, TX PTFE lined pipes distributor | 2026-03-13 |
+
+**Rejected Companies tab** — companies processed by the LLM but did not pass validation. Same columns as Leads. Useful for auditing what was filtered and why the search is surfacing certain results.
+
+- **source**: `Google Search` or `Google Places` — which API found this company.
+- **search_query**: The exact query that surfaced this company.
+- **country**: Comma-separated if multi-country (e.g. `USA, UK, India`).
+- **date_added**: ISO date (YYYY-MM-DD), set automatically.
+- Header row is frozen on both tabs for easy filtering.
 
 ---
 
@@ -122,13 +134,18 @@ pip install -r requirements.txt
 Copy `.env` and fill in your keys:
 
 ```
-GEMINI_API_KEY=...         # Google AI Studio — free tier available
-GEMINI_MODEL=gemini-2.5-flash
+GEMINI_API_KEY=...                      # Google AI Studio — free tier available
+GEMINI_MODEL=gemini-2.5-flash           # Swap model here without touching code
 
-SERPER_API_KEY=...         # serper.dev — 2,500 free searches/month
-GOOGLE_PLACES_API_KEY=...  # Google Cloud — $200 free credit/month
+SERPER_API_KEY=...                      # serper.dev — 2,500 free searches/month
+GOOGLE_PLACES_API_KEY=...               # Google Cloud — $200 free credit/month
 
 GOOGLE_SHEETS_CREDENTIALS_FILE=credentials.json
+
+# Optional — defaults shown:
+MAX_LEADS_PER_RUN=500                   # Hard cap on leads written per run
+VALIDATION_BATCH_SIZE=30                # Candidates per LLM validation call
+SEARCHES_PER_QUERY=20                   # Results fetched per search query
 ```
 
 ### 3. Google Sheets (one-time setup)
@@ -157,14 +174,14 @@ python main.py --company "Your Company Name" --region "Germany" --force-research
 
 ## API Keys & Cost
 
-| Service | Free Tier | Get Key |
-|---|---|---|
-| Gemini (LLM) | Free tier with rate limits | [aistudio.google.com](https://aistudio.google.com/app/apikey) |
-| Serper.dev | 2,500 searches/month | [serper.dev](https://serper.dev) |
-| Google Places | $200 credit/month | [Google Cloud Console](https://console.cloud.google.com) |
-| Google Sheets | Free | Same Google Cloud project |
+| Service | Get Key |
+|---|---|
+| Gemini (LLM) | [aistudio.google.com](https://aistudio.google.com/app/apikey) |
+| Serper.dev | [serper.dev](https://serper.dev) |
+| Google Places | [Google Cloud Console](https://console.cloud.google.com) |
+| Google Sheets | Same Google Cloud project as Places |
 
-Typical cost per run (100 leads): well within free tier limits for moderate usage.
+Check each provider's current pricing page — plans and free tiers change over time. LLM costs per run are very low (typically under $0.05 for Gemini 2.5 Flash at standard usage).
 
 ---
 
