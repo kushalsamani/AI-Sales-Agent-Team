@@ -55,31 +55,35 @@ _GARBAGE_DOMAINS = {
 
 _QUERY_GEN_PROMPT = """
 Generate specific Google search queries to find B2B companies that would purchase
-industrial products in a target region.
+products from this seller.
 
 SELLER: {company_name}
 
 TARGET REGION: {region}
 
-ICP TYPES TO FIND:
+ICP TYPES TO FIND (generate queries for EACH type below):
 {icp_types}
 
-PART 1 — DISTRIBUTOR QUERIES (generate exactly one query per product below — use the
-exact product name, never replace it with a generic term like "valve" or "pipe"):
-{products_list}
+PRODUCT GROUPS (generate one "distributor" and one "supplier" query for EACH group
+below — these are the core queries and must all be covered):
+{product_groups}
 
-PART 2 — EPC QUERIES (generate one query per template below, keep "PTFE PFA" at the end):
-{epc_templates}
+BUYER VOCABULARY (generate additional queries using these terms — they match how
+buyers describe their own needs on their websites, capturing companies that
+product-name queries would miss):
+{buyer_vocabulary}
 
 INSTRUCTIONS:
-  - Replace {{region}} with "{region}" or a major city/subregion
-    (e.g. for "Texas, USA" use "Texas", "Houston", "Dallas", or "TX" — vary across queries).
-  - For PART 1 (Distributors): output one query per product in the format
-    "{{region}} {{exact product name}} distributor" or "{{region}} {{exact product name}} supplier".
-    Every single product above must appear in its own query — do not skip any.
-  - For PART 2 (EPC): keep "PTFE PFA" at the end of every EPC query.
+  - Use the region EXACTLY as given: "{region}". Do NOT substitute, rotate, or
+    replace it with city names, abbreviations, or subregions.
+  - PRODUCT GROUP queries: for each group, generate one query in the format
+    "[region] [product group] distributor". Every group must appear in at least one query.
+  - BUYER VOCABULARY queries: for each vocabulary term, generate one query in the format
+    "[region] [vocab term] distributor".
+  - ICP TYPE queries: for each non-distributor ICP type (e.g. EPC firms), generate
+    additional queries using that ICP type's keywords and industry context.
   - Queries must return company websites, not articles, news, or directories.
-  - Make each query distinct — avoid near-duplicates.
+  - Make each query distinct — no near-duplicates.
 
 Return ONLY a JSON array of query strings, no other text:
 ["query 1", "query 2", ...]
@@ -189,16 +193,21 @@ def run(
         f"\n[VALIDATE] Validating {len(new_candidates)} candidates "
         f"in {total_batches} batch(es) of up to {config.VALIDATION_BATCH_SIZE}..."
     )
-    validated = _validate_in_batches(new_candidates, research, region)
-    print(f"[VALIDATE] {len(validated)} leads passed ICP validation.")
+    validated, rejected = _validate_in_batches(new_candidates, research, region)
+    print(f"[VALIDATE] {len(validated)} leads passed, {len(rejected)} rejected.")
 
     # ── Step 7: Cap at MAX_LEADS_PER_RUN ──────────────────────────────────────
     final_leads = validated[: config.MAX_LEADS_PER_RUN]
 
-    # ── Step 8: Write to Google Sheets ────────────────────────────────────────
+    # ── Step 8: Write validated leads to Google Sheets ────────────────────────
     print(f"\n[SHEETS] Writing {len(final_leads)} leads to Google Sheets...")
     written = sheets.append_leads(spreadsheet_id, final_leads)
     print(f"[SHEETS] {written} leads written successfully.")
+
+    # ── Step 9: Write rejected companies to Rejected Companies tab ────────────
+    if rejected:
+        print(f"[SHEETS] Writing {len(rejected)} rejected companies to 'Rejected Companies' tab...")
+        sheets.append_rejected_leads(spreadsheet_id, rejected)
 
     return final_leads, written
 
@@ -222,19 +231,18 @@ def _generate_queries(research: dict, region: str) -> list[str]:
         f"  - {p['type']}: {p['description']}"
         for p in research.get("icp_profiles", [])
     )
-    # EPC templates only — exclude section labels and distributor/supplier lines.
-    # Products are handled separately in PART 2 of the prompt.
-    all_templates: list = research.get("search_query_templates") or []
-    epc_templates = "\n".join(
-        f"  - {t}" for t in all_templates
-        if isinstance(t, str)
-        and t.startswith('"')
-        and "distributor" not in t.lower()
-        and "supplier" not in t.lower()
-    )
-    # Products list: one bullet per product for the distributor track.
-    all_products: list = research.get("products") or []
-    products_list = "\n".join(f"  - {p}" for p in all_products if isinstance(p, str))
+
+    # Product groups: grouped families of products (e.g. "PTFE lined pipes and fittings").
+    # Falls back to the individual products list if product_groups is not in the cache.
+    _raw_groups = research.get("product_groups") or research.get("products") or []
+    all_product_groups: list[str] = [str(g) for g in _raw_groups if g]
+    product_groups = "\n".join(f"  - {g}" for g in all_product_groups)
+
+    # Buyer vocabulary: how target buyers describe their own needs on their websites.
+    # Drives SEO-matched queries that surface companies not found by product name alone.
+    _raw_vocab = research.get("buyer_vocabulary") or []
+    all_buyer_vocab: list[str] = [str(v) for v in _raw_vocab if v]
+    buyer_vocabulary = "\n".join(f"  - {v}" for v in all_buyer_vocab)
 
     # Use a custom prompt template from the cache if one exists, otherwise
     # fall back to the built-in default. This allows per-company query strategies
@@ -244,8 +252,8 @@ def _generate_queries(research: dict, region: str) -> list[str]:
         company_name=research.get("company_summary", "")[:200],
         region=region,
         icp_types=icp_types,
-        epc_templates=epc_templates,
-        products_list=products_list,
+        product_groups=product_groups,
+        buyer_vocabulary=buyer_vocabulary,
     )
 
     try:
@@ -349,7 +357,7 @@ def _validate_in_batches(
     candidates: list[dict],
     research: dict,
     region: str,
-) -> list[dict]:
+) -> tuple[list[dict], list[dict]]:
     """
     Validate candidates against ICP criteria using Gemini in batches.
 
@@ -359,23 +367,25 @@ def _validate_in_batches(
     After LLM validation, source and search_query are re-attached from the
     original candidates using domain lookup (zero extra LLM tokens).
 
+    Only candidates that were actually sent to the LLM are counted as rejected.
+    Candidates skipped due to early stopping are not logged as rejected.
+
     Args:
         candidates: New candidates from _deduplicate (include source, search_query).
         research:   ICP research dict from research_agent.
         region:     Target region string.
 
     Returns:
-        List of validated lead dicts (company_name, website, country, source, search_query).
+        Tuple of:
+          - List of validated lead dicts (company_name, website, country, source, search_query).
+          - List of rejected candidate dicts (same format — sent to LLM but did not pass).
     """
-    # Build domain → metadata lookup for re-attaching source/search_query after validation.
-    metadata_by_domain: dict[str, dict] = {}
+    # Build domain → candidate lookup for re-attaching metadata and building rejected list.
+    candidate_by_domain: dict[str, dict] = {}
     for c in candidates:
         domain = sheets.normalize_domain(c.get("website", ""))
         if domain:
-            metadata_by_domain[domain] = {
-                "source": c.get("source", ""),
-                "search_query": c.get("search_query", ""),
-            }
+            candidate_by_domain[domain] = c
 
     icp_summary = "\n".join(
         f"  - {p['type']}: {p['why_they_buy']}"
@@ -387,6 +397,8 @@ def _validate_in_batches(
     )
 
     validated: list[dict] = []
+    processed_domains: set[str] = set()   # domains actually sent to the LLM
+    validated_domains: set[str] = set()   # domains that passed validation
     batch_size = config.VALIDATION_BATCH_SIZE
     total_batches = math.ceil(len(candidates) / batch_size)
 
@@ -399,6 +411,12 @@ def _validate_in_batches(
 
         batch = candidates[i : i + batch_size]
         print(f"  Batch {batch_num}/{total_batches} — {len(batch)} candidates...")
+
+        # Track every domain sent to the LLM so we can identify rejections later.
+        for c in batch:
+            domain = sheets.normalize_domain(c.get("website", ""))
+            if domain:
+                processed_domains.add(domain)
 
         # Send only the fields the LLM needs — reduces input tokens.
         # snippet is included for Serper results; empty string for Places results.
@@ -429,14 +447,23 @@ def _validate_in_batches(
                 # Re-attach source and search_query from pre-validation metadata.
                 for lead in result:
                     domain = sheets.normalize_domain(lead.get("website", ""))
-                    meta = metadata_by_domain.get(domain, {})
-                    lead["source"] = meta.get("source", "")
-                    lead["search_query"] = meta.get("search_query", "")
+                    if domain:
+                        validated_domains.add(domain)
+                        meta = candidate_by_domain.get(domain, {})
+                        lead["source"] = meta.get("source", "")
+                        lead["search_query"] = meta.get("search_query", "")
                 validated.extend(result)
         except ValueError as e:
             print(f"  [WARN] Batch {batch_num} validation failed: {e}. Skipping batch.")
 
-    return validated
+    # Rejected = processed by LLM but not in the validated set.
+    rejected: list[dict] = [
+        candidate_by_domain[d]
+        for d in processed_domains
+        if d not in validated_domains and d in candidate_by_domain
+    ]
+
+    return validated, rejected
 
 
 # ─── Filter Helpers ───────────────────────────────────────────────────────────
@@ -539,11 +566,19 @@ def _print_research_summary(research: dict) -> None:
     icp_types  = ", ".join(p["type"] for p in research.get("icp_profiles", []))
     anti_types = ", ".join(a["type"] for a in research.get("anti_icp", []))
 
+    products = research.get("products", [])
+    # Group products 4 per line for compact display.
+    product_lines = [
+        ", ".join(products[i : i + 4])
+        for i in range(0, len(products), 4)
+    ]
     print(f"\n{'─' * 60}")
     print("  ICP RESEARCH SUMMARY")
     print(f"{'─' * 60}")
     print(f"  Industry : {research.get('industry', 'N/A')}")
-    print(f"  Products : {', '.join(research.get('products', []))}")
+    print(f"  Products :")
+    for line in product_lines:
+        print(f"    {line}")
     print(f"  Target   : {icp_types}")
     print(f"  Exclude  : {anti_types}")
     print(f"{'─' * 60}\n")

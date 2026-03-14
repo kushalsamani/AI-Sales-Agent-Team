@@ -37,8 +37,12 @@ _SCOPES = [
     "https://www.googleapis.com/auth/drive.file",
 ]
 
-# Column order in the sheet. Must match CLAUDE.md schema.
+# Column order in the Leads sheet.
 _HEADERS = ["company_name", "website", "country", "source", "search_query", "date_added"]
+
+# Name and column order for the Rejected Companies tab.
+_REJECTED_SHEET_NAME = "Rejected Companies"
+_REJECTED_HEADERS = ["company_name", "website", "country", "source", "search_query", "date_added"]
 
 
 # ─── Authentication ────────────────────────────────────────────────────────────
@@ -227,6 +231,87 @@ def append_leads(spreadsheet_id: str, leads: list[dict]) -> int:
     except HttpError as e:
         print(f"[ERROR] Failed to write leads to sheet: {e}")
         return 0
+
+
+def append_rejected_leads(spreadsheet_id: str, rejected: list[dict]) -> int:
+    """
+    Append rejected candidate rows to the 'Rejected Companies' tab.
+
+    Creates the tab with a header row automatically if it doesn't exist yet.
+    Same column format as the Leads sheet so both tabs are easy to compare.
+
+    Args:
+        spreadsheet_id: The Google Sheets spreadsheet ID.
+        rejected: List of candidate dicts that failed ICP validation.
+
+    Returns:
+        Number of rows written. Returns 0 if list is empty or on error.
+    """
+    if not rejected:
+        return 0
+
+    service = _get_service()
+    _ensure_sheet_tab(service, spreadsheet_id, _REJECTED_SHEET_NAME, _REJECTED_HEADERS)
+
+    today = date.today().isoformat()
+    rows = [
+        [
+            r.get("company_name", ""),
+            r.get("website", ""),
+            r.get("country", ""),
+            r.get("source", ""),
+            r.get("search_query", ""),
+            today,
+        ]
+        for r in rejected
+    ]
+
+    try:
+        service.spreadsheets().values().append(
+            spreadsheetId=spreadsheet_id,
+            range=f"{_REJECTED_SHEET_NAME}!A1",
+            valueInputOption="RAW",
+            insertDataOption="INSERT_ROWS",
+            body={"values": rows},
+        ).execute()
+        return len(rows)
+    except HttpError as e:
+        print(f"[ERROR] Failed to write rejected leads to sheet: {e}")
+        return 0
+
+
+def _ensure_sheet_tab(service, spreadsheet_id: str, tab_name: str, headers: list[str]) -> None:
+    """
+    Create a sheet tab with a frozen header row if it doesn't already exist.
+
+    Args:
+        service:        Authenticated Google Sheets API service object.
+        spreadsheet_id: The spreadsheet to check/update.
+        tab_name:       Name of the tab to create if missing.
+        headers:        Column headers to write on row 1 of the new tab.
+    """
+    meta = service.spreadsheets().get(spreadsheetId=spreadsheet_id).execute()
+    existing_tabs = [s["properties"]["title"] for s in meta.get("sheets", [])]
+
+    if tab_name in existing_tabs:
+        return
+
+    # Create the tab.
+    service.spreadsheets().batchUpdate(
+        spreadsheetId=spreadsheet_id,
+        body={"requests": [{"addSheet": {"properties": {
+            "title": tab_name,
+            "gridProperties": {"frozenRowCount": 1},
+        }}}]},
+    ).execute()
+
+    # Write header row.
+    service.spreadsheets().values().update(
+        spreadsheetId=spreadsheet_id,
+        range=f"{tab_name}!A1",
+        valueInputOption="RAW",
+        body={"values": [headers]},
+    ).execute()
 
 
 # ─── URL Utilities ────────────────────────────────────────────────────────────
