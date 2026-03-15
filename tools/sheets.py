@@ -315,6 +315,144 @@ def _ensure_sheet_tab(service, spreadsheet_id: str, tab_name: str, headers: list
     ).execute()
 
 
+# ─── Classification Support ───────────────────────────────────────────────────
+
+def read_leads_for_classification(spreadsheet_id: str) -> list[dict]:
+    """
+    Read all rows from the Leads tab, including row numbers.
+
+    Returns each row as a dict keyed by the header names, plus a special
+    '_row_number' key (1-based, matching Google Sheets row numbers) so the
+    caller knows exactly which row to update when writing back.
+
+    Args:
+        spreadsheet_id: The Google Sheets spreadsheet ID.
+
+    Returns:
+        List of dicts. Returns empty list if the sheet has no data.
+    """
+    service = _get_service()
+    result = service.spreadsheets().values().get(
+        spreadsheetId=spreadsheet_id,
+        range="Leads!A1:Z",
+    ).execute()
+
+    rows = result.get("values", [])
+    if len(rows) < 2:
+        return []
+
+    headers = rows[0]
+    leads = []
+    for i, row in enumerate(rows[1:], start=2):  # row 1 is header, data starts at row 2
+        padded = row + [""] * (len(headers) - len(row))
+        lead = {headers[j]: padded[j] for j in range(len(headers))}
+        lead["_row_number"] = i
+        leads.append(lead)
+
+    return leads
+
+
+def ensure_classification_columns(spreadsheet_id: str) -> tuple[int, int]:
+    """
+    Ensure 'classification' and 'classification_reason' columns exist in the Leads tab.
+
+    If they are missing, appends them to the header row. Safe to call multiple
+    times — does nothing if the columns already exist.
+
+    Args:
+        spreadsheet_id: The Google Sheets spreadsheet ID.
+
+    Returns:
+        Tuple of (classification_col_index, reason_col_index), both 0-based.
+    """
+    service = _get_service()
+    result = service.spreadsheets().values().get(
+        spreadsheetId=spreadsheet_id,
+        range="Leads!1:1",
+    ).execute()
+
+    headers = result.get("values", [[]])[0]
+
+    changed = False
+    if "classification" not in headers:
+        headers.append("classification")
+        changed = True
+    if "classification_reason" not in headers:
+        headers.append("classification_reason")
+        changed = True
+
+    if changed:
+        service.spreadsheets().values().update(
+            spreadsheetId=spreadsheet_id,
+            range="Leads!A1",
+            valueInputOption="RAW",
+            body={"values": [headers]},
+        ).execute()
+
+    return headers.index("classification"), headers.index("classification_reason")
+
+
+def write_classification(
+    spreadsheet_id: str,
+    row_number: int,
+    classification_col: int,
+    reason_col: int,
+    classification: str,
+    reason: str,
+) -> None:
+    """
+    Write classification and reason for a single lead row.
+
+    Uses batchUpdate to write both columns in one API call.
+
+    Args:
+        spreadsheet_id:    The Google Sheets spreadsheet ID.
+        row_number:        1-based row number in the sheet.
+        classification_col: 0-based column index for 'classification'.
+        reason_col:         0-based column index for 'classification_reason'.
+        classification:    "Strong", "Weak", or "Not a Lead".
+        reason:            One sentence explaining the classification.
+    """
+    service = _get_service()
+    col_c = _col_letter(classification_col)
+    col_r = _col_letter(reason_col)
+
+    try:
+        service.spreadsheets().values().batchUpdate(
+            spreadsheetId=spreadsheet_id,
+            body={
+                "valueInputOption": "RAW",
+                "data": [
+                    {"range": f"Leads!{col_c}{row_number}", "values": [[classification]]},
+                    {"range": f"Leads!{col_r}{row_number}", "values": [[reason]]},
+                ],
+            },
+        ).execute()
+    except HttpError as e:
+        print(f"[ERROR] Failed to write classification for row {row_number}: {e}")
+
+
+def _col_letter(index: int) -> str:
+    """
+    Convert a 0-based column index to a column letter for A1 notation.
+
+    Examples: 0 → 'A', 6 → 'G', 26 → 'AA'
+
+    Args:
+        index: 0-based column index.
+
+    Returns:
+        Column letter string (e.g. 'A', 'G', 'AA').
+    """
+    result = ""
+    n = index + 1  # Switch to 1-based for the algorithm.
+    while n > 0:
+        n -= 1
+        result = chr(ord("A") + n % 26) + result
+        n //= 26
+    return result
+
+
 # ─── URL Utilities ────────────────────────────────────────────────────────────
 
 def normalize_domain(url: str) -> str | None:
