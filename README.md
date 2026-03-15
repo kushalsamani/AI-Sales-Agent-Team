@@ -233,7 +233,7 @@ Check each provider's current pricing page; plans and free tiers change over tim
 
 ## Roadmap
 
-- **v1 (current):** Lead discovery and ICP validation, written to Google Sheets with source and search query tracking.
+- **v1:** Lead discovery and ICP validation, written to Google Sheets with source and search query tracking.
 - **v1.5 (current):** Lead classification using Gemini URL Context: Strong, Weak, or Not a Lead with a reason, written back to the Leads tab.
 - **v2:** Contact enrichment, find general company emails and priority decision-maker contacts (procurement, purchasing, directors) for each discovered company.
 - **v3:** Web UI, browser-based interface wrapping the same agent pipeline.
