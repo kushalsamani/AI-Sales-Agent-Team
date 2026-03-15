@@ -1,4 +1,4 @@
-# AI Sales Agent: Lead Research Module
+# AI Sales Agent Team
 
 An AI-powered, multi-agent B2B lead generation system. Give it a company name and a target region, and it researches the industry, identifies the ideal customer profile (ICP), searches for matching companies across multiple sources, deduplicates against your existing leads, and writes a clean, validated list directly to Google Sheets.
 
