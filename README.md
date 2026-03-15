@@ -140,8 +140,8 @@ One spreadsheet per company with two tabs.
 
 | company_name | website | country | source | search_query | date_added | classification | classification_reason |
 |---|---|---|---|---|---|---|---|
-| ABC company | abccompany.com | USA | Google Search | The search query this company came from | 2026-03-13 | Strong | Distributor of corrosion-resistant piping and valves for chemical plants. |
-| XYZ company | xyzcompany.com | Canada | Google Places | The search query this company came from | 2026-03-12 | Weak | General industrial distributor with no clear focus on lined piping products. |
+| ABC company | abccompany.com | USA | Google Search | The search query this company came from | 2026-03-13 | Strong | The reason why LLM classified it as strong lead. |
+| XYZ company | xyzcompany.com | Canada | Google Places | The search query this company came from | 2026-03-12 | Weak | The reason why LLM classified it as weak lead. |
 
 **Rejected Companies tab**: companies processed by the LLM but did not pass validation. Same columns as Leads (without classification). Useful for auditing what was filtered and why.
 
