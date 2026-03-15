@@ -54,6 +54,26 @@ Input: --company "Your Company" --region "Your Region"  (e.g. "Texas, USA", "Ger
    Google Sheets: one spreadsheet per company, two tabs:
      • Leads              - companies that passed ICP validation
      • Rejected Companies - companies that were processed but did not pass
+
+Step 2 (run separately, on-demand):
+
+Input: --company "Your Company"
+             │
+             ▼
+   ┌─────────────────────┐
+   │  Classify Script    │  Reads the Leads tab, visits each company
+   │                     │  website using Gemini URL Context (Gemini
+   │                     │  fetches the page itself), and classifies
+   │                     │  each lead as Strong, Weak, or Not a Lead,
+   │                     │  with a one-sentence reason.
+   │                     │
+   │                     │  Results written back to the Leads tab as
+   │                     │  two new columns: classification and
+   │                     │  classification_reason.
+   │                     │
+   │                     │  Skips already-classified rows by default.
+   │                     │  Use --reclassify to redo all rows.
+   └─────────────────────┘
 ```
 
 ---
@@ -62,7 +82,7 @@ Input: --company "Your Company" --region "Your Region"  (e.g. "Texas, USA", "Ger
 
 ```
 AI-Sales-Agent/
-├── main.py                     # CLI entry point
+├── main.py                     # CLI entry point for lead discovery
 ├── config.py                   # All settings loaded from .env
 ├── requirements.txt
 ├── .env                        # API keys, not committed, never share this
@@ -76,6 +96,11 @@ AI-Sales-Agent/
 │   ├── serper_search.py        # Serper.dev Google Search API wrapper
 │   ├── google_places.py        # Google Places Text Search API wrapper
 │   └── sheets.py               # Google Sheets read/write + OAuth auth
+│
+├── scripts/
+│   └── classify_leads.py       # On-demand classifier: reads Leads tab, visits
+│                               # each website via Gemini URL Context, writes
+│                               # classification and reason back to the sheet.
 │
 ├── cache/
 │   └── research/               # Cached ICP research JSON, one file per company
@@ -103,6 +128,7 @@ Minimising LLM API cost is a core design constraint.
 | Lead validation | **N / 30** per run | Batched, structured JSON output |
 | Search execution | **0** | Direct API calls (Serper, Places) |
 | Sheet read/write | **0** | Google Sheets API |
+| Lead classification | **1 per lead** | Gemini URL Context fetches website, classifies Strong/Weak/Not a Lead |
 
 ---
 
@@ -110,15 +136,17 @@ Minimising LLM API cost is a core design constraint.
 
 One spreadsheet per company with two tabs.
 
-**Leads tab**: companies that passed ICP validation. For example:
+**Leads tab**: companies that passed ICP validation. Two classification columns are added automatically when you run `classify_leads.py`:
 
-| company_name | website | country | source | search_query | date_added |
-|---|---|---|---|---|---|
-| ABC company | abccompany.com | USA | Google Search | The search query this company came from | 2026-03-13 |
-| XYZ company | xyzcompany.com | Canada | Google Places | The search query this company came from | 2026-03-12 |
+| company_name | website | country | source | search_query | date_added | classification | classification_reason |
+|---|---|---|---|---|---|---|---|
+| ABC company | abccompany.com | USA | Google Search | The search query this company came from | 2026-03-13 | Strong | Distributor of corrosion-resistant piping and valves for chemical plants. |
+| XYZ company | xyzcompany.com | Canada | Google Places | The search query this company came from | 2026-03-12 | Weak | General industrial distributor with no clear focus on lined piping products. |
 
-**Rejected Companies tab**: companies processed by the LLM but did not pass validation. Same columns as Leads. Useful for auditing what was filtered and why the search is surfacing certain results.
+**Rejected Companies tab**: companies processed by the LLM but did not pass validation. Same columns as Leads (without classification). Useful for auditing what was filtered and why.
 
+- **classification**: `Strong`, `Weak`, or `Not a Lead`. Added by `classify_leads.py`, not by the main pipeline.
+- **classification_reason**: One sentence explaining the classification.
 - **source**: `Google Search` or `Google Places`, indicating which API found this company.
 - **search_query**: The exact query that surfaced this company.
 - **country**: Comma-separated if multi-country (e.g. `USA, UK, India`).
@@ -176,6 +204,18 @@ python main.py --company "Your Company Name" --region "Europe"
 python main.py --company "Your Company Name" --region "Germany" --force-research
 ```
 
+### 5. Classify leads (optional, run after discovery)
+
+```bash
+# Classify all unclassified leads in the Leads tab
+python scripts/classify_leads.py --company "Your Company Name"
+
+# Re-classify leads that already have a classification
+python scripts/classify_leads.py --company "Your Company Name" --reclassify
+```
+
+Each lead's website is read by Gemini (via URL Context) and classified as `Strong`, `Weak`, or `Not a Lead`, with a one-sentence reason written back to the sheet. Results are saved immediately, so you can safely stop and resume at any time.
+
 ---
 
 ## API Keys & Cost
@@ -193,6 +233,7 @@ Check each provider's current pricing page; plans and free tiers change over tim
 
 ## Roadmap
 
-- **v1 (current):** Lead discovery, company name, website, and country written to Google Sheets.
+- **v1 (current):** Lead discovery and ICP validation, written to Google Sheets with source and search query tracking.
+- **v1.5 (current):** Lead classification using Gemini URL Context: Strong, Weak, or Not a Lead with a reason, written back to the Leads tab.
 - **v2:** Contact enrichment, find general company emails and priority decision-maker contacts (procurement, purchasing, directors) for each discovered company.
 - **v3:** Web UI, browser-based interface wrapping the same agent pipeline.
