@@ -392,6 +392,83 @@ def ensure_classification_columns(spreadsheet_id: str) -> tuple[int, int]:
     return headers.index("classification"), headers.index("classification_reason")
 
 
+def ensure_contact_columns(spreadsheet_id: str) -> tuple[int, int]:
+    """
+    Ensure 'email' and 'phone' columns exist in the Leads tab header.
+
+    Appends them if missing. Safe to call multiple times.
+
+    Args:
+        spreadsheet_id: The Google Sheets spreadsheet ID.
+
+    Returns:
+        Tuple of (email_col_index, phone_col_index), both 0-based.
+    """
+    service = _get_service()
+    result = service.spreadsheets().values().get(
+        spreadsheetId=spreadsheet_id,
+        range="Leads!1:1",
+    ).execute()
+
+    headers = result.get("values", [[]])[0]
+
+    changed = False
+    if "email" not in headers:
+        headers.append("email")
+        changed = True
+    if "phone" not in headers:
+        headers.append("phone")
+        changed = True
+
+    if changed:
+        service.spreadsheets().values().update(
+            spreadsheetId=spreadsheet_id,
+            range="Leads!A1",
+            valueInputOption="RAW",
+            body={"values": [headers]},
+        ).execute()
+
+    return headers.index("email"), headers.index("phone")
+
+
+def write_contact_info(
+    spreadsheet_id: str,
+    row_number: int,
+    email_col: int,
+    phone_col: int,
+    email: str,
+    phone: str,
+) -> None:
+    """
+    Write email and phone for a single lead row.
+
+    Args:
+        spreadsheet_id: The Google Sheets spreadsheet ID.
+        row_number:     1-based row number in the sheet.
+        email_col:      0-based column index for 'email'.
+        phone_col:      0-based column index for 'phone'.
+        email:          Comma-separated emails found, or 'N/A'.
+        phone:          Comma-separated phone numbers found, or 'N/A'.
+    """
+    service = _get_service()
+    col_e = _col_letter(email_col)
+    col_p = _col_letter(phone_col)
+
+    try:
+        service.spreadsheets().values().batchUpdate(
+            spreadsheetId=spreadsheet_id,
+            body={
+                "valueInputOption": "RAW",
+                "data": [
+                    {"range": f"Leads!{col_e}{row_number}", "values": [[email]]},
+                    {"range": f"Leads!{col_p}{row_number}", "values": [[phone]]},
+                ],
+            },
+        ).execute()
+    except HttpError as e:
+        print(f"[ERROR] Failed to write contact info for row {row_number}: {e}")
+
+
 def write_classification(
     spreadsheet_id: str,
     row_number: int,
