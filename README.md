@@ -98,9 +98,12 @@ AI-Sales-Agent/
 │   └── sheets.py               # Google Sheets read/write + OAuth auth
 │
 ├── scripts/
-│   └── classify_leads.py       # On-demand classifier: reads Leads tab, visits
-│                               # each website via Gemini URL Context, writes
-│                               # classification and reason back to the sheet.
+│   ├── classify_leads.py       # On-demand classifier: reads Leads tab, visits
+│   │                           # each website via Gemini URL Context, writes
+│   │                           # classification and reason back to the sheet.
+│   └── enrich_contacts.py      # On-demand contact scraper: reads Strong leads,
+│                               # scrapes emails and phone numbers from company
+│                               # websites, writes back to the Leads tab.
 │
 ├── cache/
 │   └── research/               # Cached ICP research JSON, one file per company
@@ -216,6 +219,18 @@ python scripts/classify_leads.py --company "Your Company Name" --reclassify
 
 Each lead's website is read by Gemini (via URL Context) and classified as `Strong`, `Weak`, or `Not a Lead`, with a one-sentence reason written back to the sheet. Results are saved immediately, so you can safely stop and resume at any time.
 
+### 6. Enrich contacts (optional, run after classification)
+
+```bash
+# Scrape emails and phone numbers for Strong leads only
+python scripts/enrich_contacts.py --company "Your Company Name"
+
+# Re-scrape companies that already have contact info
+python scripts/enrich_contacts.py --company "Your Company Name" --re-enrich
+```
+
+Visits each Strong lead's website, checks the homepage and common contact pages (`/contact`, `/contact-us`, `/about-us`, etc.), and writes all found emails and phone numbers back to the Leads tab. No third-party APIs used.
+
 ---
 
 ## API Keys & Cost
@@ -234,6 +249,6 @@ Check each provider's current pricing page; plans and free tiers change over tim
 ## Roadmap
 
 - **v1:** Lead discovery and ICP validation, written to Google Sheets with source and search query tracking.
-- **v1.5 (current):** Lead classification using Gemini URL Context: Strong, Weak, or Not a Lead with a reason, written back to the Leads tab.
-- **v2:** Contact enrichment, find general company emails and priority decision-maker contacts (procurement, purchasing, directors) for each discovered company.
+- **v1.5:** Lead classification using Gemini URL Context: Strong, Weak, or Not a Lead with a reason, written back to the Leads tab.
+- **v2 (current):** Contact enrichment: scrapes emails and phone numbers from company websites for Strong leads, written back to the Leads tab.
 - **v3:** Web UI, browser-based interface wrapping the same agent pipeline.
