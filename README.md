@@ -129,7 +129,7 @@ Minimising LLM API cost is a core design constraint.
 | Query generation | **1** per run | Single structured prompt |
 | Deduplication | **0** | Python set of normalised domains |
 | Lead validation | **N / 30** per run | Batched, structured JSON output |
-| Search execution | **0** | Direct API calls (Serper, Places) |
+| Search execution | **0** | Direct API calls (Serper web + Serper Maps) |
 | Sheet read/write | **0** | Google Sheets API |
 | Lead classification | **1 per lead** | Gemini URL Context fetches website, classifies Strong/Weak/Not a Lead |
 
@@ -174,8 +174,7 @@ Copy `.env` and fill in your keys:
 GEMINI_API_KEY=...                      # Google AI Studio, free tier available
 GEMINI_MODEL=gemini-2.5-flash           # Swap model here without touching code
 
-SERPER_API_KEY=...                      # serper.dev
-GOOGLE_PLACES_API_KEY=...               # Google Cloud Console
+SERPER_API_KEY=...                      # serper.dev — used for both web search and Maps/Places search
 
 GOOGLE_SHEETS_CREDENTIALS_FILE=credentials.json
 
@@ -238,9 +237,8 @@ Visits each Strong lead's website, checks the homepage and common contact pages 
 | Service | Get Key |
 |---|---|
 | Gemini (LLM) | [aistudio.google.com](https://aistudio.google.com/app/apikey) |
-| Serper.dev | [serper.dev](https://serper.dev) |
-| Google Places | [Google Cloud Console](https://console.cloud.google.com) |
-| Google Sheets | Same Google Cloud project as Places |
+| Serper.dev | [serper.dev](https://serper.dev) — used for both web search and Maps/Places search |
+| Google Sheets | [console.cloud.google.com](https://console.cloud.google.com) |
 
 Check each provider's current pricing page; plans and free tiers change over time. LLM costs per run are very low (typically under $0.05 for Gemini 2.5 Flash at standard usage).
 

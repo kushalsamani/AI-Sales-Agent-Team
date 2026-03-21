@@ -1,132 +1,103 @@
 """
 tools/google_places.py
 -----------------------
-Wrapper around the Google Places Text Search API.
+Places-style business search using Serper.dev's Google Maps endpoint.
 
-Monthly credit: $200 (resets each month). Requires a Google Cloud project
-with billing enabled — but you won't be charged unless you exceed $200/month.
+Uses the same SERPER_API_KEY already configured for web search — no
+additional API key or Google Cloud billing required.
 
-Enable the Places API at:
-  https://console.cloud.google.com → APIs & Services → Places API
+Serper's /maps endpoint hits Google Maps directly and returns local
+business listings: name, website, address, phone. Cost is the same
+flat rate as a regular Serper search query (~$0.001/query), compared
+to ~$0.37/query for the Google Places API.
 
-Why use this alongside Serper?
-  Many industrial businesses have minimal web presence but are registered on
-  Google Maps / Places. This catches companies that Serper would miss due to
-  poor SEO or no website at all.
+Why use this alongside Serper web search?
+  Many industrial businesses have minimal web presence but are registered
+  on Google Maps. This catches companies that organic search would miss
+  due to poor SEO or no indexed website.
 
-  Note: Companies with no website are skipped — a website is required for
-  deduplication and as a lead data point.
+  Companies with no website in the response are skipped — a website is
+  required for deduplication and as a lead data point.
 """
 
 import requests
 import config
 
-_TEXT_SEARCH_URL = "https://maps.googleapis.com/maps/api/place/textsearch/json"
-_DETAILS_URL     = "https://maps.googleapis.com/maps/api/place/details/json"
+_MAPS_ENDPOINT = "https://google.serper.dev/maps"
 
 
 def search_places(query: str) -> list[dict]:
     """
-    Search for businesses using Google Places Text Search.
+    Search for businesses using Serper's Google Maps endpoint.
 
-    For each result, attempts to retrieve the company website. Results without
-    a discoverable website are excluded to maintain data quality.
+    Results without a website are excluded to maintain data quality.
+    Uses the same SERPER_API_KEY as the web search tool.
 
     Args:
-        query: Natural language query (e.g., "industrial pipe distributors in Texas").
+        query: Natural language query (e.g. "industrial pipe distributors in Texas").
 
     Returns:
         List of dicts with keys:
-          - 'company_name' (str): Business name from Google Places.
-          - 'website'      (str): Root domain of the company website.
-          - 'country'      (str): Country extracted from the formatted address.
+          - 'company_name' (str): Business name from Google Maps.
+          - 'website'      (str): Company website URL.
+          - 'country'      (str): Country extracted from the address.
         Returns [] if API key is not configured or the call fails.
     """
-    if not config.GOOGLE_PLACES_API_KEY or config.GOOGLE_PLACES_API_KEY.startswith("your_"):
-        print("[WARN] GOOGLE_PLACES_API_KEY not configured — skipping Places search.")
+    if not config.SERPER_API_KEY or config.SERPER_API_KEY.startswith("your_"):
+        print("[WARN] SERPER_API_KEY not configured — skipping Places search.")
         return []
 
     try:
-        response = requests.get(
-            _TEXT_SEARCH_URL,
-            params={"query": query, "key": config.GOOGLE_PLACES_API_KEY},
+        response = requests.post(
+            _MAPS_ENDPOINT,
+            headers={
+                "X-API-KEY": config.SERPER_API_KEY,
+                "Content-Type": "application/json",
+            },
+            json={"q": query, "num": config.SEARCHES_PER_QUERY},
             timeout=15,
         )
         response.raise_for_status()
-        raw_results = response.json().get("results", [])
+        raw_results = response.json().get("places", [])
 
     except requests.exceptions.Timeout:
-        print(f"[WARN] Google Places timed out for query: '{query}'")
+        print(f"[WARN] Serper Maps timed out for query: '{query}'")
         return []
     except requests.exceptions.RequestException as e:
-        print(f"[WARN] Google Places request failed for query '{query}': {e}")
+        print(f"[WARN] Serper Maps request failed for query '{query}': {e}")
         return []
 
     places = []
     for place in raw_results:
-        website = place.get("website")
-        place_id = place.get("place_id")
-
-        # Text Search doesn't always return website — fetch from Details if missing.
-        if not website and place_id:
-            website = _fetch_website(place_id)
+        website = place.get("website", "").strip()
 
         if not website:
             continue  # Skip — website required for dedup and data quality.
 
         places.append({
-            "company_name": place.get("name", ""),
+            "company_name": place.get("title", ""),
             "website": website,
-            "country": _extract_country(place.get("formatted_address", "")),
+            "country": _extract_country(place.get("address", "")),
         })
 
     return places
 
 
-def _fetch_website(place_id: str) -> str | None:
+def _extract_country(address: str) -> str:
     """
-    Fetch the website field for a place using its place_id via the Details API.
+    Extract the country from an address string.
 
-    This is a targeted call requesting only the 'website' field to minimise
-    API cost (billed per field mask in the new Places API).
+    Serper Maps returns addresses in the format:
+      "123 Main St, Houston, TX 77001, United States"
+    The country is consistently the last comma-separated component.
 
     Args:
-        place_id: Google Places place_id string.
-
-    Returns:
-        Website URL string, or None if unavailable.
-    """
-    try:
-        response = requests.get(
-            _DETAILS_URL,
-            params={
-                "place_id": place_id,
-                "fields": "website",
-                "key": config.GOOGLE_PLACES_API_KEY,
-            },
-            timeout=10,
-        )
-        response.raise_for_status()
-        return response.json().get("result", {}).get("website")
-    except requests.exceptions.RequestException:
-        return None
-
-
-def _extract_country(formatted_address: str) -> str:
-    """
-    Extract the country from a Google-formatted address string.
-
-    Google Places consistently places the country as the last comma-separated
-    component of the formatted address.
-    e.g. "123 Main St, Houston, TX 77001, United States" → "United States"
-
-    Args:
-        formatted_address: Full address string from Google Places result.
+        address: Full address string from Serper Maps result.
 
     Returns:
         Country string, or empty string if not determinable.
     """
-    if not formatted_address:
+    if not address:
         return ""
-    parts = [p.strip() for p in formatted_address.split(",")]
+    parts = [p.strip() for p in address.split(",")]
     return parts[-1] if parts else ""
