@@ -130,14 +130,12 @@ Each candidate has: company_name, website, country, and snippet (Google's descri
 of the page — may be empty for some candidates).
 
 For each company you keep:
-  - Use context clues (website, name, snippet) to determine the country.
-  - If country cannot be determined, default to the primary country in: "{region}".
   - Clean up the company name if it contains junk (e.g. " | LinkedIn", " - Home").
 
 Return ONLY a JSON object with two keys. No explanation:
 {{
-  "validated": [{{"company_name": "...", "website": "...", "country": "..."}}],
-  "rejected":  [{{"company_name": "...", "website": "...", "country": "...", "rejection_reason": "one short sentence"}}]
+  "validated": [{{"company_name": "...", "website": "..."}}],
+  "rejected":  [{{"company_name": "...", "website": "...", "rejection_reason": "one short sentence"}}]
 }}
 The "rejection_reason" must be a concise plain-English sentence explaining why the company
 was removed (e.g. "Located in Germany, not in the target region." or "Manufactures PTFE
@@ -428,7 +426,6 @@ def _validate_in_batches(
             {
                 "company_name": c.get("company_name", ""),
                 "website": c.get("website", ""),
-                "country": c.get("country", ""),
                 "snippet": c.get("snippet", ""),
             }
             for c in batch
@@ -448,22 +445,25 @@ def _validate_in_batches(
             # Low temperature — we want precise, consistent filtering, not creativity.
             result = llm.generate_json(prompt, temperature=0.1)
             if isinstance(result, dict):
-                # Re-attach source and search_query to validated companies.
+                # Re-attach source, search_query, and region to validated companies.
+                # Region comes directly from the CLI argument — not from the LLM.
                 for lead in result.get("validated", []):
                     domain = sheets.normalize_domain(lead.get("website", ""))
                     if domain:
                         meta = candidate_by_domain.get(domain, {})
                         lead["source"] = meta.get("source", "")
                         lead["search_query"] = meta.get("search_query", "")
+                        lead["region"] = region
                 validated.extend(result.get("validated", []))
 
-                # Re-attach source, search_query, and keep the rejection_reason.
+                # Re-attach source, search_query, region, and keep the rejection_reason.
                 for rej in result.get("rejected", []):
                     domain = sheets.normalize_domain(rej.get("website", ""))
                     if domain and domain in candidate_by_domain:
                         meta = candidate_by_domain[domain]
                         rej["source"] = meta.get("source", "")
                         rej["search_query"] = meta.get("search_query", "")
+                        rej["region"] = region
                         rejected_with_reasons.append(rej)
         except ValueError as e:
             print(f"  [WARN] Batch {batch_num} validation failed: {e}. Skipping batch.")
