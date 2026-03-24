@@ -34,7 +34,7 @@ def search_places(query: str) -> list[dict]:
     Uses the same SERPER_API_KEY as the web search tool.
 
     Args:
-        query: Natural language query (e.g. "industrial pipe distributors in Texas").
+        query: Natural language query (e.g. "industrial equipment suppliers in Chicago").
 
     Returns:
         List of dicts with keys:

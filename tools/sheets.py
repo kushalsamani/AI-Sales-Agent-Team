@@ -659,7 +659,7 @@ def normalize_domain(url: str) -> str | None:
     Reduce a URL to its bare root domain for deduplication comparison.
 
     Examples:
-      'https://www.abcdist.com/products/ptfe' → 'abcdist.com'
+      'https://www.abcdist.com/products/category' → 'abcdist.com'
       'http://xyzsupply.co.uk'                → 'xyzsupply.co.uk'
       'abcdist.com'                           → 'abcdist.com'
 

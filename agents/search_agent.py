@@ -138,8 +138,7 @@ Return ONLY a JSON object with two keys. No explanation:
   "rejected":  [{{"company_name": "...", "website": "...", "rejection_reason": "one short sentence"}}]
 }}
 The "rejection_reason" must be a concise plain-English sentence explaining why the company
-was removed (e.g. "Located in Germany, not in the target region." or "Manufactures PTFE
-lined pipes — direct competitor." or "Consumer retail store, no industrial relevance.").
+was removed (e.g. "Located in Germany, not in the target region." or "Manufactures the same product -- direct competitor." or "Consumer retail store, no industrial relevance.").
 """
 
 
@@ -240,7 +239,7 @@ def _generate_queries(research: dict, region: str) -> list[str]:
         for p in research.get("icp_profiles", [])
     )
 
-    # Product groups: grouped families of products (e.g. "industrial valves and fittings").
+    # Product groups: grouped families of products (e.g. "safety equipment" or "fluid handling systems").
     # Falls back to the individual products list if product_groups is not in the cache.
     _raw_groups = research.get("product_groups") or research.get("products") or []
     all_product_groups: list[str] = [str(g) for g in _raw_groups if g]

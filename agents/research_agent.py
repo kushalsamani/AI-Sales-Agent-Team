@@ -247,7 +247,7 @@ def _find_company_website(results: list[dict]) -> str | None:
         if domain and not any(skip in domain for skip in _SKIP_DOMAINS):
             # Return the root URL, not a deep page link.
             parsed = link.split("/")
-            root = "/".join(parsed[:3])  # e.g. "https://advect.ca"
+            root = "/".join(parsed[:3])  # e.g. "https://example.com"
             return root
     return None
 
