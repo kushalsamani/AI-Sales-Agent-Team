@@ -181,7 +181,7 @@ One spreadsheet per company with three tabs.
 
 | company_name | website | region | source | search_query | date_added | classification | classification_reason | email | phone |
 |---|---|---|---|---|---|---|---|---|---|
-| ABC Dist. | abcdist.com | Texas, USA | Google Search | industrial valve distributor Texas | 2026-03-13 | Strong | Distributor of industrial valves and piping. | info@abcdist.com | +1 555 000 1234 |
+| ABC Dist. | abcdist.com | region passed in CLI (for example: Texas, USA) | Google Search | Serper search query that resulted this company | 2026-03-13 | Strong | One-line LLM Reason for classifying this company as a strong lead | info@abcdist.com | +1 555 000 1234 |
 
 **Rejected Companies tab**: companies that did not pass ICP validation. Same columns as Leads (without classification). Useful for auditing what was filtered and why.
 
