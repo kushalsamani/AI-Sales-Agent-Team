@@ -1,3 +1,6 @@
+# Email automation (contains company-specific templates and logic)
+email_automation/
+
 # Sensitive credentials — never commit these
 .env
 credentials.json

@@ -105,6 +105,7 @@ AI-Sales-Agent/
 │                               # scrapes emails and phone numbers from company
 │                               # websites, writes back to the Leads tab.
 │
+│
 ├── cache/
 │   └── research/               # Cached ICP research JSON, one file per company
 │                               # Not committed, generated automatically on first run.
@@ -141,10 +142,10 @@ One spreadsheet per company with two tabs.
 
 **Leads tab**: companies that passed ICP validation. Two classification columns are added automatically when you run `classify_leads.py`:
 
-| company_name | website | country | source | search_query | date_added | classification | classification_reason |
+| company_name | website | region | source | search_query | date_added | classification | classification_reason |
 |---|---|---|---|---|---|---|---|
-| ABC company | abccompany.com | USA | Google Search | The search query this company came from | 2026-03-13 | Strong | The reason why LLM classified it as strong lead. |
-| XYZ company | xyzcompany.com | Canada | Google Places | The search query this company came from | 2026-03-12 | Weak | The reason why LLM classified it as weak lead. |
+| ABC company | abccompany.com | Texas, USA | Google Search | The search query this company came from | 2026-03-13 | Strong | The reason why LLM classified it as strong lead. |
+| XYZ company | xyzcompany.com | Ontario, Canada | Google Places | The search query this company came from | 2026-03-12 | Weak | The reason why LLM classified it as weak lead. |
 
 **Rejected Companies tab**: companies processed by the LLM but did not pass validation. Same columns as Leads (without classification). Useful for auditing what was filtered and why.
 
@@ -152,7 +153,7 @@ One spreadsheet per company with two tabs.
 - **classification_reason**: One sentence explaining the classification.
 - **source**: `Google Search` or `Google Places`, indicating which API found this company.
 - **search_query**: The exact query that surfaced this company.
-- **country**: Comma-separated if multi-country (e.g. `USA, UK, India`).
+- **region**: The region passed via `--region` when the run was executed (e.g. `Texas, USA`).
 - **date_added**: ISO date (YYYY-MM-DD), set automatically.
 - Header row is frozen on both tabs for easy filtering.
 
@@ -250,3 +251,4 @@ Check each provider's current pricing page; plans and free tiers change over tim
 - **v1.5:** Lead classification using Gemini URL Context: Strong, Weak, or Not a Lead with a reason, written back to the Leads tab.
 - **v2 (current):** Contact enrichment: scrapes emails and phone numbers from company websites for Strong leads, written back to the Leads tab.
 - **v3:** Web UI, browser-based interface wrapping the same agent pipeline.
+- **v4:** Outreach automation.
