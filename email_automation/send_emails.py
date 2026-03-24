@@ -45,7 +45,7 @@ import templates
 # --- Constants ----------------------------------------------------------------
 
 # Path to the sender logo image.
-_LOGO_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "logo.jpg")
+_LOGO_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "Advect Logo.jpg")
 
 
 # --- Opener Generation --------------------------------------------------------
@@ -91,7 +91,7 @@ def _load_logo() -> bytes:
     if not os.path.exists(_LOGO_PATH):
         raise FileNotFoundError(
             f"[EMAIL] Logo not found at: {_LOGO_PATH}\n"
-            f"Place your logo as email_automation/assets/logo.jpg"
+            f"Place your logo as email_automation/assets/Advect Logo.jpg"
         )
     with open(_LOGO_PATH, "rb") as f:
         return f.read()
