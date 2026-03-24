@@ -363,6 +363,6 @@ Check each provider's current pricing page; plans and free tiers change over tim
 
 - **v1:** Lead discovery and ICP validation, written to Google Sheets with source and search query tracking.
 - **v1.5:** Lead classification using Gemini URL Context: Strong, Weak, or Not a Lead with a reason, written back to the Leads tab.
-- **v2 (current):** Contact enrichment: scrapes emails and phone numbers from company websites for Strong leads, written back to the Leads tab.
-- **v3:** Outreach automation: personalised HTML email drafts saved to IMAP, follow-ups tracked automatically via Google Sheets.
+- **v2:** Contact enrichment: scrapes emails and phone numbers from company websites for Strong leads, written back to the Leads tab.
+- **v3 (current):** Outreach automation: personalised HTML email drafts saved to IMAP, follow-ups tracked automatically via Google Sheets.
 - **v4:** Web UI, browser-based interface wrapping the same agent pipeline.
