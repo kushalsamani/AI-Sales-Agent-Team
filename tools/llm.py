@@ -40,6 +40,36 @@ def get_client() -> genai.Client:
     return _client
 
 
+def generate_text(prompt: str, temperature: float = 0.4) -> str:
+    """
+    Send a prompt to Gemini and return the response as plain text.
+
+    Used for open-ended generation tasks like email openers where the
+    output is prose, not structured JSON.
+
+    Args:
+        prompt:      The full prompt string to send.
+        temperature: Sampling temperature. Higher values = more varied output.
+
+    Returns:
+        Response text string.
+
+    Raises:
+        ValueError: If the response is empty.
+    """
+    client = get_client()
+
+    response = client.models.generate_content(
+        model=config.GEMINI_MODEL,
+        contents=prompt,
+        config=types.GenerateContentConfig(temperature=temperature),
+    )
+
+    if not response.text:
+        raise ValueError("[LLM ERROR] Gemini returned an empty response.")
+    return response.text
+
+
 def generate_json(prompt: str, temperature: float = 0.2) -> dict | list:
     """
     Send a prompt to Gemini and return the response parsed as JSON.

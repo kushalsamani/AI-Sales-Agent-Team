@@ -36,6 +36,17 @@ VALIDATION_BATCH_SIZE: int = int(os.getenv("VALIDATION_BATCH_SIZE", "25"))
 SEARCHES_PER_QUERY: int    = int(os.getenv("SEARCHES_PER_QUERY", "10"))
 
 
+# ─── Email Automation ────────────────────────────────────────────────────────
+ZOHO_SMTP_HOST: str     = os.getenv("ZOHO_SMTP_HOST", "smtppro.zoho.in")
+ZOHO_SMTP_PORT: int     = int(os.getenv("ZOHO_SMTP_PORT", "587"))
+ZOHO_EMAIL: str         = os.getenv("ZOHO_EMAIL", "")
+ZOHO_APP_PASSWORD: str  = os.getenv("ZOHO_APP_PASSWORD", "")
+EMAILS_PER_DAY: int     = int(os.getenv("EMAILS_PER_DAY", "10"))
+EMAIL_FIRST_DELAY: int  = int(os.getenv("EMAIL_FIRST_DELAY", "14400"))
+EMAIL_DELAY_MIN: int    = int(os.getenv("EMAIL_DELAY_MIN", "240"))
+EMAIL_DELAY_MAX: int    = int(os.getenv("EMAIL_DELAY_MAX", "600"))
+
+
 # ─── Internal File Paths ──────────────────────────────────────────────────────
 CACHE_DIR: str         = "cache/research"
 SPREADSHEETS_FILE: str = "data/spreadsheets.json"

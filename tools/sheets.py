@@ -315,6 +315,128 @@ def _ensure_sheet_tab(service, spreadsheet_id: str, tab_name: str, headers: list
     ).execute()
 
 
+# ─── Approached Sheet Support ────────────────────────────────────────────────
+
+_APPROACHED_SHEET_NAME = "Approached"
+_APPROACHED_HEADERS = [
+    "company_name", "website", "region", "email_sent_to",
+    "email_subject", "sent_on", "follow_up_sent_on", "status", "reply_date",
+]
+
+
+def get_approached_companies(spreadsheet_id: str) -> list[dict]:
+    """
+    Read all rows from the Approached tab.
+
+    Args:
+        spreadsheet_id: The Google Sheets spreadsheet ID.
+
+    Returns:
+        List of dicts keyed by header names. Empty list if tab doesn't exist.
+    """
+    service = _get_service()
+    _ensure_sheet_tab(service, spreadsheet_id, _APPROACHED_SHEET_NAME, _APPROACHED_HEADERS)
+
+    try:
+        result = service.spreadsheets().values().get(
+            spreadsheetId=spreadsheet_id,
+            range=f"{_APPROACHED_SHEET_NAME}!A1:Z",
+        ).execute()
+    except HttpError:
+        return []
+
+    rows = result.get("values", [])
+    if len(rows) < 2:
+        return []
+
+    headers = rows[0]
+    output  = []
+    for row in rows[1:]:
+        padded = row + [""] * (len(headers) - len(row))
+        output.append({headers[j]: padded[j] for j in range(len(headers))})
+    return output
+
+
+def write_approached(spreadsheet_id: str, entry: dict) -> None:
+    """
+    Append one row to the Approached tab.
+
+    Creates the tab automatically if it doesn't exist.
+
+    Args:
+        spreadsheet_id: The Google Sheets spreadsheet ID.
+        entry:          Dict with keys matching _APPROACHED_HEADERS.
+    """
+    service = _get_service()
+    _ensure_sheet_tab(service, spreadsheet_id, _APPROACHED_SHEET_NAME, _APPROACHED_HEADERS)
+
+    row = [entry.get(h, "") for h in _APPROACHED_HEADERS]
+
+    try:
+        service.spreadsheets().values().append(
+            spreadsheetId=spreadsheet_id,
+            range=f"{_APPROACHED_SHEET_NAME}!A1",
+            valueInputOption="RAW",
+            insertDataOption="INSERT_ROWS",
+            body={"values": [row]},
+        ).execute()
+    except HttpError as e:
+        print(f"[ERROR] Failed to write to Approached sheet: {e}")
+
+
+def update_approached_followup(spreadsheet_id: str, website: str, followup_date: str) -> None:
+    """
+    Update the follow_up_sent_on and status columns for a company in the Approached tab.
+
+    Finds the row by matching website domain, then updates in place.
+
+    Args:
+        spreadsheet_id: The Google Sheets spreadsheet ID.
+        website:        Website domain to look up.
+        followup_date:  ISO date string (YYYY-MM-DD) for follow_up_sent_on.
+    """
+    service = _get_service()
+
+    result = service.spreadsheets().values().get(
+        spreadsheetId=spreadsheet_id,
+        range=f"{_APPROACHED_SHEET_NAME}!A1:Z",
+    ).execute()
+
+    rows = result.get("values", [])
+    if len(rows) < 2:
+        return
+
+    headers = rows[0]
+    website_col   = headers.index("website")          if "website"           in headers else None
+    followup_col  = headers.index("follow_up_sent_on") if "follow_up_sent_on" in headers else None
+    status_col    = headers.index("status")            if "status"            in headers else None
+
+    if website_col is None or followup_col is None or status_col is None:
+        return
+
+    target_domain = normalize_domain(website) or ""
+
+    for i, row in enumerate(rows[1:], start=2):
+        padded = row + [""] * (len(headers) - len(row))
+        if (normalize_domain(padded[website_col]) or "") == target_domain:
+            fu_col_letter  = _col_letter(followup_col)
+            st_col_letter  = _col_letter(status_col)
+            try:
+                service.spreadsheets().values().batchUpdate(
+                    spreadsheetId=spreadsheet_id,
+                    body={
+                        "valueInputOption": "RAW",
+                        "data": [
+                            {"range": f"{_APPROACHED_SHEET_NAME}!{fu_col_letter}{i}", "values": [[followup_date]]},
+                            {"range": f"{_APPROACHED_SHEET_NAME}!{st_col_letter}{i}", "values": [["Follow-up Sent"]]},
+                        ],
+                    },
+                ).execute()
+            except HttpError as e:
+                print(f"[ERROR] Failed to update follow-up status: {e}")
+            return
+
+
 # ─── Classification Support ───────────────────────────────────────────────────
 
 def read_leads_for_classification(spreadsheet_id: str) -> list[dict]:
