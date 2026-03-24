@@ -287,25 +287,25 @@ The email engine (`email_automation/send_emails.py`) is company-agnostic. Before
 SENDER_NAME    = "Your Name"
 SENDER_DISPLAY = "Your Company Name"
 
-ADVECT_WEBSITE   = "https://yourwebsite.com/"     # primary website URL
-ADVECTON_WEBSITE = "https://yourwebsite2.com/"    # optional second website, or same as above
+WEBSITE_PRIMARY   = "https://yourwebsite.com/"     # primary website URL
+WEBSITE_SECONDARY = "https://yourwebsite2.com/"    # optional second website, or same as above
+
+LOGO_FILENAME = "your_logo.jpg"   # filename inside email_automation/assets/
 
 IMAP_HOST = "imap.yourprovider.com"   # e.g. imappro.zoho.in, imap.gmail.com
 IMAP_PORT = 993
 
 FOLLOWUP_DAYS = 5   # business days before a follow-up is drafted
 
-_EPC_KEYWORDS = ["engineering", "construction", "procurement", "contractor", "project"]
-
+# get_subject: return the email subject line based on the target company.
+# Use classification_reason to vary the subject if needed, or return a fixed string.
 def get_subject(classification_reason: str) -> str:
-    if any(kw in classification_reason.lower() for kw in _EPC_KEYWORDS):
-        return "Your EPC Subject Line"
-    return "Your Default Subject Line"
+    return "Your Subject Line"
 
+# get_partner_word: return a word or phrase that fits the sentence
+# "we are looking for ___ who can represent our products."
 def get_partner_word(classification_reason: str) -> str:
-    if any(kw in classification_reason.lower() for kw in _EPC_KEYWORDS):
-        return "project partners"
-    return "distributors"
+    return "partners"
 ```
 
 **`email_automation/templates.py`** -- your HTML email bodies and Gemini opener prompt:
@@ -335,7 +335,7 @@ Write exactly 2 sentences...
 """
 ```
 
-**`email_automation/assets/your_logo.jpg`** -- your company logo. Referenced as `assets/Advect Logo.jpg` in the engine by default; update `_LOGO_PATH` in `send_emails.py` to match your filename.
+**`email_automation/assets/your_logo.jpg`** -- your company logo. Set `LOGO_FILENAME` in `sender.py` to match the exact filename you place here.
 
 Once those files are in place:
 

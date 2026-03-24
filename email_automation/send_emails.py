@@ -45,7 +45,7 @@ import templates
 # --- Constants ----------------------------------------------------------------
 
 # Path to the sender logo image.
-_LOGO_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "Advect Logo.jpg")
+_LOGO_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", sender.LOGO_FILENAME)
 
 
 # --- Opener Generation --------------------------------------------------------
@@ -91,7 +91,7 @@ def _load_logo() -> bytes:
     if not os.path.exists(_LOGO_PATH):
         raise FileNotFoundError(
             f"[EMAIL] Logo not found at: {_LOGO_PATH}\n"
-            f"Place your logo as email_automation/assets/Advect Logo.jpg"
+            f"Place your logo in email_automation/assets/ and set LOGO_FILENAME in sender.py"
         )
     with open(_LOGO_PATH, "rb") as f:
         return f.read()
@@ -334,8 +334,8 @@ def run(company_name: str) -> None:
             company_name=company_name_lead,
             opener=opener,
             partner_word=partner_word,
-            advect_website=sender.ADVECT_WEBSITE,
-            advecton_website=sender.ADVECTON_WEBSITE,
+            website_primary=sender.WEBSITE_PRIMARY,
+            website_secondary=sender.WEBSITE_SECONDARY,
             sender_name=sender.SENDER_NAME,
             logo_cid=logo_cid,
         )
@@ -355,8 +355,8 @@ def run(company_name: str) -> None:
         logo_cid = f"logo_fu_{company_name_lead.replace(' ', '_')}"
         html = templates.HTML_FOLLOWUP.format(
             company_name=company_name_lead,
-            advect_website=sender.ADVECT_WEBSITE,
-            advecton_website=sender.ADVECTON_WEBSITE,
+            website_primary=sender.WEBSITE_PRIMARY,
+            website_secondary=sender.WEBSITE_SECONDARY,
             sender_name=sender.SENDER_NAME,
             logo_cid=logo_cid,
         )
