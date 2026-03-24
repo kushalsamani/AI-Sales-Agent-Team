@@ -1,5 +1,7 @@
-# Email automation (contains company-specific templates and logic)
-email_automation/
+# Email automation -- company-specific files are gitignored, engine is tracked
+email_automation/sender.py
+email_automation/templates.py
+email_automation/assets/
 
 # Sensitive credentials — never commit these
 .env
