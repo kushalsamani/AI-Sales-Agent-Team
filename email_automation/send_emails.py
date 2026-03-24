@@ -47,10 +47,6 @@ import templates
 # Path to the sender logo image.
 _LOGO_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "logo.jpg")
 
-# Zoho IMAP settings.
-_IMAP_HOST = "imappro.zoho.in"
-_IMAP_PORT = 993
-
 
 # --- Opener Generation --------------------------------------------------------
 
@@ -156,7 +152,7 @@ def _save_drafts(messages: list[MIMEMultipart]) -> int:
     """
     saved = 0
     try:
-        with imaplib.IMAP4_SSL(_IMAP_HOST, _IMAP_PORT) as imap:
+        with imaplib.IMAP4_SSL(sender.IMAP_HOST, sender.IMAP_PORT) as imap:
             imap.login(config.ZOHO_EMAIL, config.ZOHO_APP_PASSWORD)
             drafts_folder = _find_drafts_folder(imap)
             print(f"[IMAP] Saving to folder: {drafts_folder}")
@@ -374,7 +370,7 @@ def run(company_name: str) -> None:
         return
 
     # -- Save all drafts to Zoho -----------------------------------------------
-    print(f"\n[IMAP] Connecting to {_IMAP_HOST}...")
+    print(f"\n[IMAP] Connecting to {sender.IMAP_HOST}...")
     mime_messages = [m for m, _, _ in messages_to_save]
     saved = _save_drafts(mime_messages)
     print(f"[IMAP] {saved}/{len(mime_messages)} drafts saved to Zoho.")
